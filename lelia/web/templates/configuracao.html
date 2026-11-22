@@ -1,0 +1,456 @@
+{% extends "base.html" %}
+{% block topbar %}{{ project.name }} — Configuração{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>Configuração da pesquisa</h1>
+  <p class="muted">Escopo científico do projeto <a href="/projetos/{{ project.slug }}">← voltar ao projeto</a></p>
+</div>
+
+<div class="tabs">
+  <button class="tab active" data-tab="identificacao">Identificação</button>
+  <button class="tab" data-tab="areas">Áreas de pesquisa</button>
+  <button class="tab" data-tab="questoes">Questões de pesquisa</button>
+  <button class="tab" data-tab="criterios">Critérios IC/EC</button>
+  <button class="tab" data-tab="caracterizacao">Caracterização científica</button>
+  <button class="tab" data-tab="qualidade">Avaliação da Qualidade</button>
+</div>
+
+<!-- ============ Aba A: Identificação ============ -->
+<section class="tab-pane" id="tab-identificacao">
+  <form method="post" action="/projetos/{{ project.slug }}/configuracao/identificacao" class="card form-stack">
+    <label>Nome da pesquisa
+      <input type="text" name="research_name" value="{{ config.get('research_name', project.name) }}">
+    </label>
+    <div class="form-row">
+      <label>Início da cobertura
+        <span style="display:flex;gap:6px">
+          <input type="number" name="coverage_start_year" value="{{ config.get('coverage_start', '')[:4] }}" placeholder="Ano" min="1000" max="2100" style="width:90px">
+          <select name="coverage_start_month">
+            <option value="">mês</option>
+            {% for m in range(1, 13) %}<option value="{{ '%02d' | format(m) }}" {% if config.get('coverage_start', '')[5:7] == '%02d' | format(m) %}selected{% endif %}>{{ ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'][m-1] }}</option>{% endfor %}
+          </select>
+        </span>
+      </label>
+      <label>Fim da cobertura
+        <span style="display:flex;gap:6px">
+          <input type="number" name="coverage_end_year" value="{{ config.get('coverage_end', '')[:4] }}" placeholder="Ano" min="1000" max="2100" style="width:90px">
+          <select name="coverage_end_month">
+            <option value="">mês</option>
+            {% for m in range(1, 13) %}<option value="{{ '%02d' | format(m) }}" {% if config.get('coverage_end', '')[5:7] == '%02d' | format(m) %}selected{% endif %}>{{ ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'][m-1] }}</option>{% endfor %}
+          </select>
+        </span>
+      </label>
+    </div>
+    <button class="btn" type="submit">Salvar</button>
+  </form>
+</section>
+
+<!-- ============ Aba B: Áreas ============ -->
+<section class="tab-pane hidden" id="tab-areas">
+  {% for a in areas %}
+  <details class="card conf-areas" {% if loop.first %}open{% endif %}>
+    <summary><strong>{{ a.name }}</strong> <span class="badge badge-{{ 'ativo' if a.status == 'ativa' else 'arquivado' }}">{{ a.status }}</span>
+      <span class="muted small">{{ a.keywords | map(attribute='term') | join(', ') }}</span></summary>
+    <form method="post" action="/projetos/{{ project.slug }}/configuracao/areas/save" class="form-stack" style="margin-top:12px">
+      <input type="hidden" name="area_id" value="{{ a.id }}">
+      <div class="form-row">
+        <label>Nome <input type="text" name="name" value="{{ a.name }}" required></label>
+        <label>Status
+          <select name="status">
+            <option value="ativa" {% if a.status == 'ativa' %}selected{% endif %}>Ativa</option>
+            <option value="inativa" {% if a.status == 'inativa' %}selected{% endif %}>Inativa</option>
+          </select>
+        </label>
+      </div>
+      <label>Palavras-chave (uma por linha; sinônimos separados por vírgula)
+        <textarea name="keywords" rows="3">{{ a.keywords | map(attribute='term') | join('\n') }}</textarea>
+      </label>
+      <div class="actions-row">
+        <button class="btn btn-sm" type="submit">Salvar área</button>
+      </div>
+    </form>
+    <form method="post" action="/projetos/{{ project.slug }}/configuracao/areas/{{ a.id }}/delete" class="inline"
+          onsubmit="return confirm('Remover a área {{ a.name }} e suas palavras-chave?');">
+      <button class="btn btn-danger btn-sm">Remover área</button>
+    </form>
+  </details>
+  {% endfor %}
+
+  <details class="card conf-areas">
+    <summary><strong>+ Nova área de pesquisa</strong></summary>
+    <form method="post" action="/projetos/{{ project.slug }}/configuracao/areas/save" class="form-stack" style="margin-top:12px">
+      <div class="form-row">
+        <label>Nome <input type="text" name="name" required placeholder="ex.: Big Data"></label>
+        <label>Status
+          <select name="status"><option value="ativa">Ativa</option><option value="inativa">Inativa</option></select>
+        </label>
+      </div>
+      <label>Palavras-chave (uma por linha; sinônimos separados por vírgula)
+        <textarea name="keywords" rows="3" placeholder="Big Data, Data Lake&#10;Data Analytics, analytics&#10;trajectory mining, movelets"></textarea>
+      </label>
+      <button class="btn btn-sm" type="submit">Adicionar área</button>
+    </form>
+  </details>
+</section>
+
+<!-- ============ Aba C: Questões ============ -->
+<section class="tab-pane hidden" id="tab-questoes">
+  <div class="card">
+    <table class="table">
+      <thead><tr><th>ID</th><th>Questão</th><th>Tipo de resposta</th><th>Obrigatória</th><th>Ordem</th><th></th></tr></thead>
+      <tbody>
+        {% for q in questions %}
+        <tr>
+          <td><code>{{ q.code }}</code></td>
+          <td>{{ q.question }}</td>
+          <td>{{ q.answer_type }}</td>
+          <td>{{ 'Sim' if q.required else 'Não' }}</td>
+          <td>{{ q.position }}</td>
+          <td class="actions">
+            <button type="button" class="btn btn-ghost btn-sm js-edit" data-form="new-questoes"
+              data-rq_id="{{ q.id }}" data-code="{{ q.code }}" data-question="{{ q.question }}"
+              data-answer_type="{{ q.answer_type }}" data-position="{{ q.position }}"
+              data-required="{{ '1' if q.required else '' }}">Editar</button>
+            <form method="post" action="/projetos/{{ project.slug }}/configuracao/questions/{{ q.id }}/delete" class="inline"
+                  onsubmit="return confirm('Remover {{ q.code }}?');">
+              <button class="btn btn-danger btn-sm">Remover</button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="empty">Nenhuma questão cadastrada.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <details class="card" id="new-questoes">
+    <summary><strong>+ Nova questão de pesquisa</strong></summary>
+    <form method="post" action="/projetos/{{ project.slug }}/configuracao/questions/save" class="form-stack" style="margin-top:12px" id="form-questoes">
+      <input type="hidden" name="rq_id" value="">
+      <div class="form-row">
+        <label>Identificador <input type="text" name="code" placeholder="RQ1" required></label>
+        <label>Ordem <input type="number" name="position" value="0" min="0"></label>
+      </div>
+      <label>Questão <textarea name="question" rows="2" required placeholder="Como X afeta Y?"></textarea></label>
+      <div class="form-row">
+        <label>Tipo de resposta
+          <select name="answer_type">
+            <option value="texto">Texto</option>
+            <option value="classificacao">Classificação</option>
+            <option value="quantitativo">Quantitativo</option>
+          </select>
+        </label>
+        <label class="check"><input type="checkbox" name="required" checked> Obrigatória</label>
+      </div>
+      <div class="actions-row">
+        <button class="btn btn-sm" type="submit">Adicionar questão</button>
+        <button class="btn btn-ghost btn-sm js-cancel hidden" type="button">Cancelar edição</button>
+      </div>
+    </form>
+  </details>
+</section>
+
+<!-- ============ Aba D: Critérios ============ -->
+<section class="tab-pane hidden" id="tab-criterios">
+  <div class="card">
+    <table class="table">
+      <thead><tr><th>ID</th><th>Tipo</th><th>Descrição</th><th>Aplicação</th><th>Obrigatório</th><th>Ordem</th><th></th></tr></thead>
+      <tbody>
+        {% for c in criteria %}
+        <tr>
+          <td><code>{{ c.code }}</code></td>
+          <td><span class="badge {{ 'badge-ativo' if c.type == 'inclusao' else 'badge-arquivado' }}">{{ 'Inclusão' if c.type == 'inclusao' else 'Exclusão' }}</span></td>
+          <td>{{ c.description }}</td>
+          <td>{{ 'Título/resumo' if c.applies_to == 'titulo_resumo' else 'Texto completo' if c.applies_to == 'texto_completo' else 'Ambos' }}</td>
+          <td>{{ 'Sim' if c.required else 'Não' }}</td>
+          <td>{{ c.position }}</td>
+          <td class="actions">
+            <button type="button" class="btn btn-ghost btn-sm js-edit" data-form="new-criterios"
+              data-criterion_id="{{ c.id }}" data-code="{{ c.code }}" data-type="{{ c.type }}"
+              data-description="{{ c.description }}" data-applies_to="{{ c.applies_to }}"
+              data-position="{{ c.position }}" data-required="{{ '1' if c.required else '' }}">Editar</button>
+            <form method="post" action="/projetos/{{ project.slug }}/configuracao/criteria/{{ c.id }}/delete" class="inline"
+                  onsubmit="return confirm('Remover {{ c.code }}?');">
+              <button class="btn btn-danger btn-sm">Remover</button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="empty">Nenhum critério cadastrado.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <details class="card" id="new-criterios">
+    <summary><strong>+ Novo critério</strong></summary>
+    <form method="post" action="/projetos/{{ project.slug }}/configuracao/criteria/save" class="form-stack" style="margin-top:12px" id="form-criterios">
+      <input type="hidden" name="criterion_id" value="">
+      <div class="form-row">
+        <label>Identificador <input type="text" name="code" placeholder="IC01 ou EC01" required></label>
+        <label>Tipo
+          <select name="type"><option value="inclusao">Inclusão</option><option value="exclusao">Exclusão</option></select>
+        </label>
+        <label>Ordem <input type="number" name="position" value="0" min="0"></label>
+      </div>
+      <label>Descrição <textarea name="description" rows="2" required placeholder="Ex.: estudos empíricos sobre dados de trajetória"></textarea></label>
+      <div class="form-row">
+        <label>Aplicação
+          <select name="applies_to">
+            <option value="titulo_resumo">Título/resumo</option>
+            <option value="texto_completo">Texto completo</option>
+            <option value="ambos">Ambos</option>
+          </select>
+        </label>
+        <label class="check"><input type="checkbox" name="required" checked> Obrigatório</label>
+      </div>
+      <div class="actions-row">
+        <button class="btn btn-sm" type="submit">Adicionar critério</button>
+        <button class="btn btn-ghost btn-sm js-cancel hidden" type="button">Cancelar edição</button>
+      </div>
+    </form>
+  </details>
+</section>
+
+<!-- ============ Aba E: Caracterização científica ============ -->
+<section class="tab-pane hidden" id="tab-caracterizacao">
+  <div class="card">
+    <table class="table">
+      <thead><tr><th>ID</th><th>Nome</th><th>Tipo</th><th>Origem</th><th>Obrig.</th><th>Ativo</th><th>Ordem</th><th></th></tr></thead>
+      <tbody>
+        {% for f in catalog_fields %}
+        <tr>
+          <td><code>{{ f.identifier }}</code></td>
+          <td>{{ f.label }}</td>
+          <td>{{ f.data_type }}</td>
+          <td>{{ f.origin }}</td>
+          <td>{{ 'Sim' if f.required else 'Não' }}</td>
+          <td>{{ 'Sim' if f.active else 'Não' }}</td>
+          <td>{{ f.position }}</td>
+          <td class="actions">
+            <button type="button" class="btn btn-ghost btn-sm js-edit" data-form="new-caracterizacao"
+              data-field_id="{{ f.id }}" data-identifier="{{ f.identifier }}" data-label="{{ f.label }}"
+              data-description="{{ f.description }}" data-data_type="{{ f.data_type }}"
+              data-origin="{{ f.origin }}" data-rq_code="{{ f.rq_code }}"
+              data-position="{{ f.position }}" data-llm_instruction="{{ f.llm_instruction }}"
+              data-required="{{ '1' if f.required else '' }}" data-active="{{ '1' if f.active else '' }}">Editar</button>
+            <form method="post" action="/projetos/{{ project.slug }}/configuracao/fields/{{ f.id }}/delete" class="inline"
+                  onsubmit="return confirm('Remover campo {{ f.identifier }}?');">
+              <button class="btn btn-danger btn-sm">Remover</button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" class="empty">Nenhum campo de caracterização cadastrado.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <details class="card" id="new-caracterizacao">
+    <summary><strong>+ Novo campo de caracterização</strong></summary>
+    <form method="post" action="/projetos/{{ project.slug }}/configuracao/fields/save" class="form-stack" style="margin-top:12px" id="form-caracterizacao">
+      <input type="hidden" name="field_id" value="">
+      <div class="form-row">
+        <label>Identificador <input type="text" name="identifier" placeholder="ex.: classificacao" required></label>
+        <label>Nome de exibição <input type="text" name="label" placeholder="ex.: Classificação" required></label>
+      </div>
+      <label>Descrição <textarea name="description" rows="2"></textarea></label>
+      <div class="form-row">
+        <label>Tipo de dado
+          <select name="data_type">
+            <option value="texto">Texto</option><option value="numero">Número</option>
+            <option value="lista">Lista</option><option value="booleano">Booleano</option>
+            <option value="estruturado">Estruturado</option>
+          </select>
+        </label>
+        <label>Origem
+          <select name="origin">
+            <option value="agente">Agente</option><option value="metadados">Metadados</option>
+            <option value="sistema">Sistema</option><option value="pesquisador">Pesquisador</option>
+          </select>
+        </label>
+        <label>Questão relacionada <input type="text" name="rq_code" placeholder="RQ1"></label>
+        <label>Ordem <input type="number" name="position" value="0" min="0"></label>
+      </div>
+      <label>Instrução para LLM <textarea name="llm_instruction" rows="2" placeholder="Orientação específica de extração"></textarea></label>
+      <div class="form-row">
+        <label class="check"><input type="checkbox" name="required"> Obrigatório</label>
+        <label class="check"><input type="checkbox" name="active" checked> Ativo</label>
+      </div>
+      <div class="actions-row">
+        <button class="btn btn-sm" type="submit">Adicionar campo</button>
+        <button class="btn btn-ghost btn-sm js-cancel hidden" type="button">Cancelar edição</button>
+      </div>
+    </form>
+  </details>
+</section>
+
+
+<!-- ============ Aba F: Avaliação da Qualidade dos Estudos ============ -->
+<section class="tab-pane hidden" id="tab-qualidade">
+  <p class="muted small">Critérios de avaliação da qualidade dos estudos. Cada publicação pode receber uma nota de 0,0 a 1,0 por critério; a <strong>nota de qualidade</strong> é a média ponderada.</p>
+  <div class="card">
+    <table class="table">
+      <thead><tr><th>ID</th><th>Descrição</th><th>Peso</th><th>Obrig.</th><th>Ativo</th><th>Ordem</th><th></th></tr></thead>
+      <tbody>
+        {% for c in quality_criteria %}
+        <tr>
+          <td><code>{{ c.code }}</code></td>
+          <td>{{ c.description }}</td>
+          <td>{{ c.weight }}</td>
+          <td>{{ 'Sim' if c.required else 'Não' }}</td>
+          <td>{{ 'Sim' if c.active else 'Não' }}</td>
+          <td>{{ c.position }}</td>
+          <td class="actions">
+            <button type="button" class="btn btn-ghost btn-sm js-edit" data-form="new-qualidade"
+              data-criterion_id="{{ c.id }}" data-code="{{ c.code }}" data-description="{{ c.description }}"
+              data-weight="{{ c.weight }}" data-position="{{ c.position }}"
+              data-required="{{ '1' if c.required else '' }}" data-active="{{ '1' if c.active else '' }}">Editar</button>
+            <form method="post" action="/projetos/{{ project.slug }}/configuracao/qualidade/{{ c.id }}/delete" class="inline"
+                  onsubmit="return confirm('Remover {{ c.code }}? As notas existentes também serão removidas.');">
+              <button class="btn btn-danger btn-sm">Remover</button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="empty">Nenhum critério de qualidade cadastrado.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <details class="card" id="new-qualidade">
+    <summary><strong>+ Novo critério de qualidade</strong></summary>
+    <form method="post" action="/projetos/{{ project.slug }}/configuracao/qualidade/save" class="form-stack" style="margin-top:12px" id="form-qualidade">
+      <input type="hidden" name="criterion_id" value="">
+      <div class="form-row">
+        <label>ID <input type="text" name="code" value="{{ next_aq }}" required></label>
+        <label>Peso <input type="number" name="weight" value="1.0" step="0.1" min="0"></label>
+        <label>Ordem <input type="number" name="position" value="0" min="0"></label>
+      </div>
+      <label>Descrição <textarea name="description" rows="2" required placeholder="Ex.: clareza da questão de pesquisa e justificativa"></textarea></label>
+      <div class="form-row">
+        <label class="check"><input type="checkbox" name="required"> Obrigatório</label>
+        <label class="check"><input type="checkbox" name="active" checked> Ativo</label>
+      </div>
+      <div class="actions-row">
+        <button class="btn btn-sm" type="submit">Adicionar critério</button>
+        <button class="btn btn-ghost btn-sm js-cancel hidden" type="button">Cancelar edição</button>
+      </div>
+    </form>
+  </details>
+</section>
+
+<script>
+(function () {
+  var tabs = document.querySelectorAll('.tab');
+  function show(id) {
+    document.querySelectorAll('.tab-pane').forEach(function (p) { p.classList.add('hidden'); });
+    var pane = document.getElementById('tab-' + id);
+    if (pane) pane.classList.remove('hidden');
+    tabs.forEach(function (t) { t.classList.toggle('active', t.dataset.tab === id); });
+  }
+  tabs.forEach(function (t) { t.addEventListener('click', function () { show(t.dataset.tab); }); });
+  var anchor = location.hash.replace('#', '');
+  if (anchor) {
+    var map = { areas: 'areas', questoes: 'questoes', criterios: 'criterios', caracterizacao: 'caracterizacao', qualidade: 'qualidade' };
+    if (map[anchor]) show(anchor);
+  }
+
+  // Edição no formulário de "novo": preencher com dados da linha
+  function resetForm(form) {
+    form.reset();
+    var idInput = form.querySelector('input[type="hidden"][name$="_id"]');
+    if (idInput) idInput.value = '';
+    var submit = form.querySelector('button[type="submit"]');
+    if (submit && submit.dataset.orig) submit.textContent = submit.dataset.orig;
+    form.querySelectorAll('.js-cancel').forEach(function (b) { b.classList.add('hidden'); });
+  }
+  document.querySelectorAll('.js-edit').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var card = document.getElementById(btn.dataset.form);
+      if (!card) return;
+      if (card.tagName === 'DETAILS') card.open = true;
+      var form = card.querySelector('form');
+      if (!form) return;
+      form.querySelectorAll('[name]').forEach(function (el) {
+        if (el.type === 'hidden') return;
+        var v = btn.dataset[el.name];
+        if (v === undefined) return;
+        if (el.type === 'checkbox') el.checked = (v === '1');
+        else el.value = v;
+      });
+      var idInput = form.querySelector('input[type="hidden"][name$="_id"]');
+      if (idInput && btn.dataset[idInput.name] !== undefined) idInput.value = btn.dataset[idInput.name];
+      var submit = form.querySelector('button[type="submit"]');
+      if (submit) {
+        if (!submit.dataset.orig) submit.dataset.orig = submit.textContent;
+        submit.textContent = 'Salvar alterações';
+      }
+      form.querySelectorAll('.js-cancel').forEach(function (b) { b.classList.remove('hidden'); });
+      card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  });
+  document.querySelectorAll('.js-cancel').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var form = btn.closest('form');
+      if (form) resetForm(form);
+    });
+  });
+})();
+</script>
+
+<script>
+  document.querySelectorAll('details.conf-areas textarea[name="keywords"]').forEach((textarea) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'kw-editor-wrap';
+
+    const backdrop = document.createElement('div');
+    backdrop.className = 'kw-backdrop';
+    backdrop.setAttribute('aria-hidden', 'true');
+
+    textarea.parentNode.insertBefore(wrap, textarea);
+    wrap.appendChild(backdrop);
+    wrap.appendChild(textarea);
+
+    const escapeHtml = (str) =>
+      str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+    const renderBadges = () => {
+      const lines = textarea.value.split('\n');
+      const html = lines
+        .map((line) => {
+          const parts = line.split(',');
+          return parts
+            .map((part, idx) => {
+              const match = part.match(/^(\s*)(.*?)(\s*)$/);
+              const [, lead, term, trail] = match;
+              if (!term) return escapeHtml(part);
+              const cls = idx === 0 ? 'kw-badge is-primary' : 'kw-badge';
+              return `${escapeHtml(lead)}<mark class="${cls}">${escapeHtml(term)}</mark>${escapeHtml(trail)}`;
+            })
+            .join('<span class="kw-sep">,</span>');
+        })
+        .join('\n');
+
+      // Espaço final garante altura correta quando o texto termina com quebra de linha
+      backdrop.innerHTML = textarea.value.endsWith('\n') ? `${html} ` : html;
+    };
+
+    const syncScroll = () => {
+      backdrop.scrollTop = textarea.scrollTop;
+      backdrop.scrollLeft = textarea.scrollLeft;
+    };
+
+    textarea.addEventListener('input', () => {
+      renderBadges();
+      syncScroll();
+    });
+    textarea.addEventListener('scroll', syncScroll);
+
+    renderBadges();
+  });
+</script>
+{% endblock %}

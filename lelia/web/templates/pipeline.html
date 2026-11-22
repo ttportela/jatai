@@ -1,0 +1,252 @@
+{% extends "base.html" %}
+{% block topbar %}{{ project.name }} — Agentes e pipeline{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>Agentes e pipeline</h1>
+  <p class="muted"><a href="/projetos/{{ project.slug }}">← voltar ao projeto</a> · <a href="/projetos/{{ project.slug }}/agente/modelos">Modelos LLM</a> · <a href="/projetos/{{ project.slug }}/agente/execucoes">Execuções</a>
+    · <button type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('help-tarefas').showModal()">?</button></p>
+</div>
+
+<dialog id="help-tarefas" class="modal">
+  <div class="modal-head">
+    <h2>Tipos de tarefa do pipeline</h2>
+    <button type="button" class="btn btn-ghost btn-sm" onclick="this.closest('dialog').close()">✕</button>
+  </div>
+  <p class="muted small">Cada agente executa uma sequência ordenada destas tarefas a cada iteração. Tarefas marcadas com <span class="badge badge-arquivado">LLM</span> consomem modelo de linguagem (e contam para o limite de custo); as demais são gratuitas.</p>
+  <table class="table">
+    <thead><tr><th>Tarefa</th><th>Tipo</th><th>LLM</th><th>O que faz</th></tr></thead>
+    <tbody>
+      {% for t in task_types %}
+      <tr>
+        <td><strong>{{ t.name }}</strong></td>
+        <td><code class="small">{{ t.type }}</code></td>
+        <td>{% if t.uses_llm %}<span class="badge badge-arquivado">LLM</span>{% else %}<span class="muted small">—</span>{% endif %}</td>
+        <td class="small">{{ t.description }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</dialog>
+
+<div class="card">
+  <h2 class="card-title">Agentes</h2>
+  <p class="muted small">Cada agente é um conjunto de tarefas do pipeline que ele executa. Vários agentes podem rodar execuções simultâneas e independentes.</p>
+  <table class="table">
+    <thead><tr><th>Agente</th><th>Descrição</th><th>Tarefas ativas</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+      {% for a in agents %}
+      {% set ativas = a.tasks | selectattr('enabled') | list | length %}
+      <tr>
+        <td><strong>{{ a.name }}</strong>{% if a.is_default %} <span class="badge badge-novo">padrão</span>{% endif %}</td>
+        <td class="muted small">{{ a.description }}</td>
+        <td>{{ ativas }}/{{ a.tasks | length }}</td>
+        <td><span class="badge {{ 'ativo' if a.enabled else 'arquivado' }}">{{ 'ativo' if a.enabled else 'inativo' }}</span></td>
+        <td class="actions">
+          <a class="btn btn-ghost btn-sm" href="#agente-{{ a.id }}" title="Configurar agente">⚙</a>
+          {% if not a.is_default %}
+          <form method="post" action="/projetos/{{ project.slug }}/agente/agentes/{{ a.id }}/delete" class="inline"
+                onsubmit="return confirm('Remover o agente {{ a.name }} e suas configurações de tarefas?');">
+            <button class="btn btn-danger btn-sm" title="Remover agente">🗑</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <details class="card" style="margin-top:12px">
+    <summary><strong>+ Novo agente</strong></summary>
+    <form method="post" action="/projetos/{{ project.slug }}/agente/agentes/save" class="form-stack" style="margin-top:12px">
+      <div class="form-row">
+        <label>Nome <input type="text" name="name" required placeholder="ex.: Agente de triagem"></label>
+        <label class="check"><input type="checkbox" name="enabled" checked> Ativo</label>
+      </div>
+      <label>Descrição <input type="text" name="description" placeholder="Papel deste agente no pipeline"></label>
+      <button class="btn btn-sm" type="submit">Adicionar agente</button>
+    </form>
+  </details>
+</div>
+
+{% for a in agents %}
+<div class="card" id="agente-{{ a.id }}">
+  <h2 class="card-title">{{ a.name }} {% if a.is_default %}<span class="badge badge-novo">padrão</span>{% endif %}
+    <span class="badge {{ 'ativo' if a.enabled else 'arquivado' }}">{{ 'ativo' if a.enabled else 'inativo' }}</span></h2>
+  <form method="post" action="/projetos/{{ project.slug }}/agente/agentes/save" class="form-inline" style="margin-bottom:14px">
+    <input type="hidden" name="agent_id" value="{{ a.id }}">
+    <input type="text" name="name" value="{{ a.name }}" style="max-width:220px" required>
+    <input type="text" name="description" value="{{ a.description }}" placeholder="Descrição" style="flex:2">
+    <label class="check"><input type="checkbox" name="enabled" {% if a.enabled %}checked{% endif %}> Ativo</label>
+    <button class="btn btn-sm" type="submit">Salvar agente</button>
+  </form>
+
+  <div class="pipeline-flow">
+    {% for t in a.tasks %}
+    <div class="pipeline-step {{ 'off' if not t.enabled }}">
+      <span class="step-num">{{ loop.index }}</span>
+      <strong>{{ t.name }}</strong>
+      <code class="small">{{ t.task_type }}</code>
+    </div>
+    {% else %}
+    <p class="muted small">Nenhuma tarefa adicionada — use o seletor abaixo para compor o agente.</p>
+    {% endfor %}
+  </div>
+
+  <form method="post" action="/projetos/{{ project.slug }}/agente/agentes/{{ a.id }}/tarefas/add" class="form-inline" style="margin-bottom:14px">
+    <select name="task_type" required>
+      <option value="">+ Adicionar tarefa…</option>
+      {% set existentes = a.tasks | map(attribute='task_type') | list %}
+      {% for tt in task_types %}
+      {% if tt.type not in existentes %}
+      <option value="{{ tt.type }}">{{ tt.name }} ({{ tt.type }})</option>
+      {% endif %}
+      {% endfor %}
+    </select>
+    <button class="btn btn-sm" type="submit">Adicionar</button>
+  </form>
+
+  {% for t in a.tasks %}
+  <details class="card task-card" {% if loop.first %}open{% endif %}>
+    <summary>
+      <strong>{{ loop.index }}. {{ t.name }}</strong>
+      <code class="small">{{ t.task_type }}</code>
+      <span class="badge {{ 'ativo' if t.enabled else 'arquivado' }}">{{ 'ativa' if t.enabled else 'inativa' }}</span>
+      <span class="muted small" style="margin-left:auto">
+        <button type="submit" form="mv-{{ t.id }}-up" class="btn btn-ghost btn-sm" {% if loop.first %}disabled{% endif %} title="Mover para cima">↑</button>
+        <button type="submit" form="mv-{{ t.id }}-down" class="btn btn-ghost btn-sm" {% if loop.last %}disabled{% endif %} title="Mover para baixo">↓</button>
+      </span>
+    </summary>
+    <form method="post" action="/projetos/{{ project.slug }}/agente/agentes/{{ a.id }}/tarefas/{{ t.task_type }}" class="form-grid">
+      <label class="check"><input type="checkbox" name="enabled" {% if t.enabled %}checked{% endif %}> Ativa neste agente</label>
+      <label>Nome <input type="text" name="name" value="{{ t.name }}"></label>
+      <label>Modelo
+        <span class="model-picker">
+          <input type="hidden" name="llm_model" class="llm-model-input" value="{{ t.llm_model }}">
+          <span class="model-picker-label muted small">{{ model_labels.get(t.llm_model, '— padrão do projeto —') }}</span>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="openModelPicker(this)">Escolher…</button>
+          {% if t.llm_model %}<button type="button" class="btn btn-ghost btn-sm" onclick="clearModelPicker(this)" title="Voltar ao modelo padrão do projeto">Padrão</button>{% endif %}
+        </span>
+      </label>
+      <label>Template de prompt
+        <select name="prompt_template">
+          <option value="">— embutido —</option>
+          {% for tp in templates %}<option value="{{ tp.id }}" {% if t.prompt_template == tp.id|string %}selected{% endif %}>{{ tp.name }} v{{ tp.version }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Versão <input type="text" name="prompt_version" value="{{ t.prompt_version }}" size="6"></label>
+      <label>Máx. tokens <input type="number" name="max_tokens" value="{{ t.max_tokens }}" min="0" step="256"></label>
+      <label>Tentativas <input type="number" name="max_attempts" value="{{ t.max_attempts }}" min="1" max="10"></label>
+      <label>Revisão
+        <select name="review_policy">
+          {% for p in policies %}<option value="{{ p }}" {% if t.review_policy == p %}selected{% endif %}>{{ p }}</option>{% endfor %}
+        </select>
+      </label>
+      {% set info = tt_map.get(t.task_type) %}
+      {% if info and info.fields %}
+      <div class="span2" style="grid-column: 1 / -1">
+        <p class="muted small" style="margin:0 0 8px">{{ info.description }}</p>
+        <div class="form-row">
+        {% for fld in info.fields %}
+          {% set val = t.params_dict.get(fld.key, fld.default) %}
+          {% if fld.type == 'checkbox' %}
+          <label class="check"><input type="checkbox" name="param_{{ fld.key }}" {% if val %}checked{% endif %}> {{ fld.label }}</label>
+          {% elif fld.type == 'number' %}
+          <label>{{ fld.label }} <input type="number" name="param_{{ fld.key }}" value="{{ val }}" step="any" min="0"></label>
+          {% else %}
+          <label style="flex:1">{{ fld.label }} <input type="text" name="param_{{ fld.key }}" value="{{ val }}"></label>
+          {% endif %}
+        {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+      <label class="span2">Condições (JSON) <input type="text" name="conditions" value='{{ t.conditions }}'></label>
+      <div class="span2 actions-row">
+        <button class="btn btn-sm" type="submit">Salvar tarefa</button>
+        <button class="btn btn-danger btn-sm" type="submit" form="rm-{{ t.id }}">Remover do agente</button>
+      </div>
+    </form>
+    <form id="rm-{{ t.id }}" method="post" action="/projetos/{{ project.slug }}/agente/agentes/{{ a.id }}/tarefas/{{ t.id }}/remover" class="hidden"
+          onsubmit="return confirm('Remover a tarefa {{ t.name }} deste agente?');"></form>
+    <form id="mv-{{ t.id }}-up" method="post" action="/projetos/{{ project.slug }}/agente/agentes/{{ a.id }}/tarefas/{{ t.id }}/mover" class="hidden"><input type="hidden" name="dir" value="up"></form>
+    <form id="mv-{{ t.id }}-down" method="post" action="/projetos/{{ project.slug }}/agente/agentes/{{ a.id }}/tarefas/{{ t.id }}/mover" class="hidden"><input type="hidden" name="dir" value="down"></form>
+  </details>
+  {% endfor %}
+</div>
+{% endfor %}
+
+<dialog id="model-picker" class="modal" style="width:min(760px,94vw)">
+  <div class="modal-head">
+    <h2>Selecionar modelo</h2>
+    <button type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('model-picker').close()">✕</button>
+  </div>
+  <div class="form-inline" style="margin-bottom:8px">
+    <input type="text" id="mp-q" placeholder="Buscar por nome…" style="flex:2">
+    <select id="mp-provider">
+      <option value="">Todos os provedores</option>
+      {% for pid, pname in provider_names.items() %}<option value="{{ pid }}">{{ pname }}</option>{% endfor %}
+    </select>
+    <select id="mp-custo">
+      <option value="todos">Todos os custos</option>
+      <option value="gratis">Custo $0</option>
+    </select>
+    <label class="check"><input type="checkbox" id="mp-so-ativos" checked> só ativos</label>
+  </div>
+  <div id="mp-list" style="max-height:50vh;overflow-y:auto;border:1px solid var(--border);border-radius:6px"></div>
+  <p class="muted small" id="mp-count" style="margin:6px 0 0"></p>
+</dialog>
+
+<script>
+var MODELOS = {{ model_options | tojson }};
+var mpTarget = null;
+function openModelPicker(btn) {
+  mpTarget = btn.closest('form').querySelector('.llm-model-input');
+  document.getElementById('mp-q').value = '';
+  renderModelPicker();
+  document.getElementById('model-picker').showModal();
+  setTimeout(function(){ document.getElementById('mp-q').focus(); }, 50);
+}
+function clearModelPicker(btn) {
+  var inp = btn.closest('form').querySelector('.llm-model-input');
+  inp.value = '';
+  inp.closest('.model-picker').querySelector('.model-picker-label').textContent = '— padrão do projeto —';
+}
+function renderModelPicker() {
+  var q = document.getElementById('mp-q').value.toLowerCase();
+  var prov = document.getElementById('mp-provider').value;
+  var custo = document.getElementById('mp-custo').value;
+  var list = document.getElementById('mp-list');
+  var n = 0;
+  var html = '';
+  for (var i = 0; i < MODELOS.length; i++) {
+    var m = MODELOS[i];
+    if (q && m.identifier.toLowerCase().indexOf(q) < 0 &&
+        m.provider.toLowerCase().indexOf(q) < 0) continue;
+    if (prov && String(m.provider_id) !== prov) continue;
+    if (custo === 'gratis' && (m.cost_in || m.cost_out)) continue;
+    n++;
+    var sel = mpTarget && mpTarget.value === m.ref;
+    html += '<div class="mp-item" data-ref="' + m.ref + '" style="padding:6px 10px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:baseline;' + (sel ? 'background:var(--accent-bg,#eef2ff)' : '') + '" '
+      + 'onmouseenter="this.style.background=\'var(--hover,#f1f5f9)\'" onmouseleave="this.style.background=\'' + (sel ? 'var(--accent-bg,#eef2ff)' : '') + '\'">'
+      + '<code>' + m.identifier + '</code>'
+      + (m.is_default ? '<span title="padrão do projeto">★</span>' : '')
+      + '<span class="muted small mp-prov" style="flex:1">' + m.provider + '</span>'
+      + '<span class="muted small">' + (m.cost_in || m.cost_out ? ('$' + m.cost_in + '/$' + m.cost_out) : 'grátis') + '</span>'
+      + '</div>';
+  }
+  list.innerHTML = html || '<p class="muted small" style="padding:10px">Nenhum modelo encontrado.</p>';
+  document.getElementById('mp-count').textContent = n + ' modelo(s)';
+  Array.prototype.forEach.call(list.querySelectorAll('.mp-item'), function(el) {
+    el.onclick = function() {
+      mpTarget.value = el.dataset.ref;
+      mpTarget.closest('.model-picker').querySelector('.model-picker-label').textContent =
+        el.querySelector('code').textContent + ' (' +
+        el.querySelector('.mp-prov').textContent.trim() + ')';
+      document.getElementById('model-picker').close();
+    };
+  });
+}
+['mp-q','mp-provider','mp-custo'].forEach(function(id){
+  document.getElementById(id).addEventListener('input', renderModelPicker);
+  document.getElementById(id).addEventListener('change', renderModelPicker);
+});
+</script>
+{% endblock %}

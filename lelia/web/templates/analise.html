@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+{% block topbar %}{{ project.name }} — Análise{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>Análise</h1>
+  <p class="muted"><a href="/projetos/{{ project.slug }}">← voltar ao projeto</a> · resultados produzidos pelo agente</p>
+</div>
+
+<div class="tabs" style="margin-bottom:14px">
+  <a class="tab {{ 'active' if aba == 'agente' else '' }}" href="?aba=agente">Análise do agente</a>
+  <a class="tab {{ 'active' if aba == 'questoes' else '' }}" href="?aba=questoes">Respostas às questões</a>
+  <a class="tab {{ 'active' if aba == 'evidencias' else '' }}" href="?aba=evidencias">Evidências</a>
+  <a class="tab {{ 'active' if aba == 'classificacao' else '' }}" href="?aba=classificacao">Classificação</a>
+</div>
+
+{% if aba == 'agente' %}
+<div class="card">
+  <h2 class="card-title">Análises do agente por publicação</h2>
+  {% if kind_counts %}
+  <p class="muted small" style="margin-bottom:10px">
+    {% for kind, n in kind_counts.items() %}<span class="badge badge-novo">{{ kind }}: {{ n }}</span> {% endfor %}
+  </p>
+  {% endif %}
+  <table class="table">
+    <thead><tr><th>Publicação</th><th>Ano</th><th>Estado</th><th>Análises</th><th>Última análise</th></tr></thead>
+    <tbody>
+      {% for it in items %}
+      <tr>
+        <td style="max-width:380px"><a href="/projetos/{{ project.slug }}/publicacoes/{{ it.paper.id }}">{{ it.paper.title[:110] }}{% if it.paper.title|length > 110 %}…{% endif %}</a></td>
+        <td>{{ it.paper.year or '—' }}</td>
+        <td><span class="badge badge-{{ 'ativo' if it.paper.state == 'incluido' else 'arquivado' if it.paper.state == 'excluido' else 'pausado' if it.paper.state == 'talvez' else 'novo' }}">{{ it.paper.state }}</span></td>
+        <td>
+          {% for kind in it.kinds %}<span class="badge badge-{{ 'ativo' if 'erro' not in kind else 'arquivado' }}">{{ kind }}</span> {% endfor %}
+          {% for triagem in it.triagens %}
+          <details style="margin-top:6px">
+            <summary class="muted small" style="cursor:pointer">triagem {{ 'título/resumo' if triagem.stage == 'titulo_resumo' else 'texto completo' }}: <strong>{{ triagem.verdict }}</strong>{% if triagem.confidence is not none %} · conf. {{ '%.2f' | format(triagem.confidence) }}{% endif %}</summary>
+            <table class="table" style="margin-top:6px">
+              <thead><tr><th>Critério</th><th>Atende?</th><th>Veredito</th><th>Justificativa</th><th>Evidência</th><th>Origem</th></tr></thead>
+              <tbody>
+                {% for e in triagem.evaluations %}
+                <tr>
+                  <td><code>{{ e.code }}</code> <span class="muted small">{{ e.kind }}{% if e.required %}*{% endif %}</span></td>
+                  <td>{% if e.met is sameas true %}sim{% elif e.met is sameas false %}não{% else %}—{% endif %}</td>
+                  <td>{{ e.verdict }}</td>
+                  <td class="small">{{ e.justification or '—' }}</td>
+                  <td class="small muted">{% if e.evidence %}“{{ e.evidence[:160] }}{% if e.evidence|length > 160 %}…{% endif %}”{% else %}—{% endif %}</td>
+                  <td>{{ e.origin }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+            {% if triagem.rule_notes %}<p class="muted small">Regras: {{ triagem.rule_notes | join('; ') }}</p>{% endif %}
+          </details>
+          {% endfor %}
+        </td>
+        <td class="muted small">{{ it.last.strftime('%d/%m/%Y %H:%M') if it.last else '—' }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="empty">Nenhuma análise registrada. Execute o agente com as tarefas de análise.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% elif aba == 'questoes' %}
+<div class="card">
+  <h2 class="card-title">Respostas às questões de pesquisa</h2>
+  {% if questions and rows %}
+  <p class="muted small" style="margin-bottom:10px">{{ rows|length }} publicação(ões) com análise profunda. Respostas extraídas pelo agente — verifique as evidências na publicação.</p>
+  <div style="overflow-x:auto">
+  <table class="table">
+    <thead>
+      <tr>
+        <th style="min-width:220px">Publicação</th>
+        {% for q in questions %}<th style="min-width:220px">{{ q.code }}<div class="muted small" style="font-weight:400">{{ q.question[:80] }}{% if q.question|length > 80 %}…{% endif %}</div></th>{% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td><a href="/projetos/{{ project.slug }}/publicacoes/{{ r.paper.id }}">{{ r.paper.title[:90] }}{% if r.paper.title|length > 90 %}…{% endif %}</a></td>
+        {% for q in questions %}
+        {% set ans = r.answers.get(q.code) %}
+        <td class="small" style="vertical-align:top">
+          {% if ans %}
+          <div>{{ ans.answer[:220] }}{% if ans.answer|length > 220 %}…{% endif %}</div>
+          {% if ans.evidence %}<div class="muted" style="font-size:11px;margin-top:3px">“{{ ans.evidence[:120] }}{% if ans.evidence|length > 120 %}…{% endif %}”</div>{% endif %}
+          {% else %}<span class="muted">—</span>{% endif %}
+        </td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <p class="muted">Nenhuma resposta disponível. Cadastre questões de pesquisa na configuração e execute a análise profunda do agente.</p>
+  {% endif %}
+</div>
+{% elif aba == 'evidencias' %}
+<div class="card">
+  <h2 class="card-title">Evidências <span class="muted small">({{ etotal }})</span></h2>
+  <table class="table">
+    <thead><tr><th>Publicação</th><th>Trecho</th><th>Página</th><th>Data</th></tr></thead>
+    <tbody>
+      {% for ev, title in evidences %}
+      <tr>
+        <td style="max-width:240px"><span class="muted small">{{ title[:80] }}{% if title|length > 80 %}…{% endif %}</span></td>
+        <td class="small" style="max-width:520px">{{ ev.excerpt[:400] }}{% if ev.excerpt|length > 400 %}…{% endif %}</td>
+        <td>{{ ev.page or '—' }}</td>
+        <td class="muted small">{{ ev.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" class="empty">Nenhuma evidência registrada.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% if epages > 1 %}
+  <div class="pagination">
+    {% for p in range(1, epages + 1) %}
+      {% if p == page %}<span class="btn btn-sm btn-primary">{{ p }}</span>
+      {% else %}<a class="btn btn-ghost btn-sm" href="?aba=evidencias&page={{ p }}">{{ p }}</a>{% endif %}
+    {% endfor %}
+    <span class="muted small">({{ etotal }} resultados)</span>
+  </div>
+  {% endif %}
+</div>
+{% elif aba == 'classificacao' %}
+<div class="card">
+  <h2 class="card-title">Classificação dos estudos</h2>
+  {% if fields and rows %}
+  <p class="muted small" style="margin-bottom:10px">{{ rows|length }} publicação(ões) classificadas. Campos de caracterização configurados na aba E da configuração.</p>
+  <div style="overflow-x:auto">
+  <table class="table">
+    <thead>
+      <tr>
+        <th style="min-width:200px">Publicação</th>
+        {% for f in fields %}<th style="min-width:140px">{{ f.label }}<div class="muted small" style="font-weight:400">{{ f.identifier }}</div></th>{% endfor %}
+        <th style="min-width:110px">Ações</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td><a href="/projetos/{{ project.slug }}/publicacoes/{{ r.paper.id }}">{{ r.paper.title[:90] }}{% if r.paper.title|length > 90 %}…{% endif %}</a></td>
+        {% for f in fields %}
+        <td class="small" style="vertical-align:top">{{ r.vals.get(f.identifier) if r.vals.get(f.identifier) is not none else '—' }}</td>
+        {% endfor %}
+        <td class="small" style="vertical-align:top;white-space:nowrap">
+          <a class="btn btn-ghost btn-sm" href="?aba=classificacao&editar={{ r.paper.id }}#classificacao">Editar</a>
+          <form method="post" action="/projetos/{{ project.slug }}/qualidade/analise/classificacao/{{ r.paper.id }}/excluir" class="inline"
+                onsubmit="return confirm('Excluir a classificação desta publicação?');">
+            <button class="btn btn-danger btn-sm" type="submit">Excluir</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% if edit_paper %}
+  <div class="card" id="classificacao" style="margin-top:14px">
+    <h3 class="card-title" style="font-size:15px">Editar classificação — #{{ edit_paper.id }}</h3>
+    <p class="muted small" style="margin:0 0 10px"><a href="/projetos/{{ project.slug }}/publicacoes/{{ edit_paper.id }}">{{ edit_paper.title[:120] }}{% if edit_paper.title|length > 120 %}…{% endif %}</a></p>
+    <form method="post" action="/projetos/{{ project.slug }}/qualidade/analise/classificacao/{{ edit_paper.id }}" class="classif-form">
+      {% for f in fields %}
+      <div class="classif-field">
+        <div class="classif-field-head">
+          <strong>{{ f.label }}</strong>
+          <span class="muted small"><code>{{ f.identifier }}</code> · {{ f.data_type }}{% if f.required %} · obrigatório{% endif %}</span>
+        </div>
+        {% if f.llm_instruction %}<p class="muted small" style="margin:2px 0 6px">{{ f.llm_instruction }}</p>{% endif %}
+        <textarea name="v_{{ f.identifier }}" rows="3" placeholder="Valor de {{ f.label }}">{{ edit_vals.get(f.identifier, '') }}</textarea>
+      </div>
+      {% endfor %}
+      <div class="actions-row" style="margin-top:10px">
+        <button class="btn btn-sm btn-primary" type="submit">Salvar classificação</button>
+        <a class="btn btn-ghost btn-sm" href="?aba=classificacao">Cancelar</a>
+      </div>
+    </form>
+  </div>
+  {% endif %}
+  {% else %}
+  <p class="muted">Nenhuma classificação disponível. Cadastre campos de caracterização na configuração e execute a tarefa de classificação do agente.</p>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}
+</file_path>
+</invoke>
+</invoke>
+</invoke>_placeholder_1<|sep|>x<|close|>response<|sep|><|close|>message<|sep|><|end_of_msg|>
+

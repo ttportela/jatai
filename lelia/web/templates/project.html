@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block topbar %}{{ project.name }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>{{ project.name }} <code>{{ project.slug }}</code></h1>
+  <p class="muted">{{ project.description }}</p>
+</div>
+
+<div class="card">
+  <h2 class="card-title">Pesquisa</h2>
+  <div class="form-row">
+    <a class="btn btn-ghost" href="/projetos/{{ project.slug }}/configuracao">Configuração da pesquisa</a>
+    <a class="btn btn-ghost" href="/projetos/{{ project.slug }}/fontes">Fontes bibliográficas</a>
+    <a class="btn btn-ghost" href="/projetos/{{ project.slug }}/consultas">Consultas</a>
+    <a class="btn btn-ghost" href="/projetos/{{ project.slug }}/publicacoes">Publicações ({{ publications }})</a>
+    <a class="btn btn-ghost" href="/projetos/{{ project.slug }}/agente/pipeline">Pipeline</a>
+    <a class="btn btn-ghost" href="/projetos/{{ project.slug }}/agente/modelos">Modelos LLM</a>
+    <a class="btn btn-ghost" href="/projetos/{{ project.slug }}/agente/execucoes">Execuções</a>
+    <a class="btn btn-ghost" href="/projetos/{{ project.slug }}/conceitos">Conceitos</a>
+    <a class="btn btn-ghost" href="/projetos/{{ project.slug }}/revisoes">Triagem</a>
+    <a class="btn btn-ghost" href="/projetos/{{ project.slug }}/dashboard">Dashboard</a>
+    <a class="btn btn-ghost" href="/projetos/{{ project.slug }}/exportacoes">Exportações</a>
+  </div>
+</div>
+
+<div class="card">
+  <h2 class="card-title">Dashboard</h2>
+  <div class="stat-grid">
+    <div class="stat"><span class="stat-num">{{ stats.papers_total }}</span><span class="stat-label">Publicações</span></div>
+    <div class="stat"><span class="stat-num">{{ stats.states.get('incluido', 0) }}</span><span class="stat-label">Incluídos</span></div>
+    <div class="stat"><span class="stat-num">{{ stats.states.get('talvez', 0) }}</span><span class="stat-label">Talvez</span></div>
+    <div class="stat"><span class="stat-num">{{ stats.states.get('excluido', 0) }}</span><span class="stat-label">Excluídos</span></div>
+    <div class="stat"><span class="stat-num">{{ stats.queries_total }}</span><span class="stat-label">Consultas</span></div>
+    <div class="stat"><span class="stat-num">{{ stats.queries_pending }}</span><span class="stat-label">Consultas pendentes</span></div>
+    <div class="stat"><span class="stat-num">{{ stats.runs_total }}</span><span class="stat-label">Execuções</span></div>
+    <div class="stat"><span class="stat-num">{{ stats.runs_active }}</span><span class="stat-label">Em andamento</span></div>
+    <div class="stat"><span class="stat-num">{{ stats.concepts }}</span><span class="stat-label">Conceitos</span></div>
+    <div class="stat"><span class="stat-num">{{ stats.llm_calls }}</span><span class="stat-label">Chamadas LLM</span></div>
+    <div class="stat"><span class="stat-num">${{ '%.4f' | format(stats.llm_cost) }}</span><span class="stat-label">Custo LLM</span></div>
+  </div>
+  {% if recent_runs %}
+  <h3 class="card-title">Runs recentes</h3>
+  <table class="table">
+    <thead><tr><th>#</th><th>Status</th><th>Início</th><th>Fim</th></tr></thead>
+    <tbody>
+      {% for r in recent_runs %}
+      <tr><td>#{{ r.id }}</td><td>{{ r.status }}</td><td class="muted small">{{ r.started_at.strftime('%d/%m %H:%M') if r.started_at else '—' }}</td><td class="muted small">{{ r.finished_at.strftime('%d/%m %H:%M') if r.finished_at else '—' }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</div>
+
+<div class="grid-2">
+  <div class="card">
+    <h2 class="card-title">Informações</h2>
+    <form method="post" action="/projetos/{{ project.slug }}/update" class="form-stack">
+      <label>Nome
+        <input type="text" name="name" value="{{ project.name }}">
+      </label>
+      <label>Descrição
+        <textarea name="description" rows="3">{{ project.description }}</textarea>
+      </label>
+      <button class="btn" type="submit">Salvar</button>
+    </form>
+  </div>
+
+  <div>
+    <div class="card">
+      <h2 class="card-title">Status e workspace</h2>
+      <table class="kv">
+        <tr><td>Status</td><td><span class="badge badge-{{ project.status }}">{{ project.status }}</span></td></tr>
+        <tr><td>Criado em</td><td>{{ project.created_at.strftime('%d/%m/%Y %H:%M') if project.created_at else '—' }}</td></tr>
+        <tr><td>Publicações</td><td>{{ publications }}</td></tr>
+        <tr><td>Workspace</td><td><code>{{ project.workspace }}</code></td></tr>
+      </table>
+      <form method="post" action="/projetos/{{ project.slug }}/status" class="inline">
+        <input type="hidden" name="status" value="{{ 'pausado' if project.status == 'ativo' else 'ativo' }}">
+        <button class="btn btn-ghost btn-sm">{{ 'Pausar' if project.status == 'ativo' else 'Retomar' }}</button>
+      </form>
+      <form method="post" action="/projetos/{{ project.slug }}/duplicate" class="inline">
+        <button class="btn btn-ghost btn-sm">Duplicar configurações</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2 class="card-title">Atividade recente</h2>
+      {% if events %}
+      <ul class="event-list">
+        {% for e in events %}
+        <li><span class="muted">{{ e.ts.strftime('%d/%m %H:%M') }}</span> <code>{{ e.type }}</code> <span class="muted">{{ e.operation }}</span></li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="muted small">Nenhum evento registrado ainda.</p>
+      {% endif %}
+      <a class="small" href="/sistema/historico">Ver histórico completo →</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

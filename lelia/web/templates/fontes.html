@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block topbar %}{{ project.name }} — Fontes{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>Fontes bibliográficas</h1>
+  <p class="muted">Bases utilizadas nas buscas do projeto. <a href="/projetos/{{ project.slug }}">← voltar ao projeto</a></p>
+</div>
+
+<div class="card">
+  <table class="table">
+    <thead><tr><th>Fonte</th><th>Tipo</th><th>Status</th><th>Conector</th><th>API key</th><th></th></tr></thead>
+    <tbody>
+      {% for s in sources %}
+      <tr>
+        <td><strong>{{ s.name }}</strong></td>
+        <td><code>{{ s.source_type }}</code></td>
+        <td><span class="badge {{ 'badge-ativo' if s.enabled else 'badge-arquivado' }}">{{ 'Ativa' if s.enabled else 'Inativa' }}</span></td>
+        <td class="muted small">{{ 'Implementado' if s.source_type in implemented else 'Planejado' }}</td>
+        <td class="muted small">
+          {% if (s.config or {}).get('api_key') %}•••••••• configurada{% else %}<span class="muted">—</span>{% endif %}
+          {% if s.source_type in api_key_required %}<span style="color: var(--danger)" title="API key obrigatória">*</span>{% endif %}
+        </td>
+        <td class="actions">
+          {% if homepages.get(s.source_type) %}
+          <a class="btn btn-ghost btn-sm" href="{{ homepages[s.source_type] }}"
+             target="_blank" rel="noopener"
+             title="Abrir página oficial em nova aba">↗</a>
+          {% endif %}
+          <button type="button" class="btn btn-ghost btn-sm"
+                  onclick="openFonteConfig({{ s.id }}, '{{ s.name }}')">⚙</button>
+          <form method="post" action="/projetos/{{ project.slug }}/fontes/{{ s.id }}/toggle" class="inline">
+            <input type="checkbox" name="enabled" {% if s.enabled %}checked{% endif %} onchange="this.form.submit()">
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="muted small">Cada fonte é implementada como um scraper/conector seguindo o padrão Strategy (<code>lelia/sources/</code>). Conectores disponíveis: {% for t in implemented | sort %}<code>{{ t }}</code>{% if not loop.last %}, {% endif %}{% endfor %}; as demais serão habilitadas conforme implementação.</p>
+</div>
+
+<div class="card">
+  <h2 class="card-title">Importar arquivo</h2>
+  <p class="muted small">Importe referências em BibTeX (.bib) ou RIS (.ris). O arquivo é armazenado no workspace do projeto e o parsing ocorrerá na fase de aquisição.</p>
+  <form method="post" action="/projetos/{{ project.slug }}/fontes/import" enctype="multipart/form-data" class="form-inline">
+    <input type="file" name="file" accept=".bib,.ris" required>
+    <button class="btn" type="submit">Importar</button>
+  </form>
+</div>
+
+<dialog id="dlg-fonte-config" class="modal">
+  <form method="post" id="form-fonte-config">
+    <h3>Configurar fonte — <span id="fonte-config-nome"></span></h3>
+    <div class="form-grid">
+      <label>API key
+        <input type="password" name="api_key" autocomplete="off"
+               placeholder="Deixe vazio para remover">
+      </label>
+      <p class="muted small">Usada pelo conector quando a fonte a suporta (ex.: Semantic Scholar). A chave fica salva apenas no banco do projeto.</p>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-ghost" onclick="this.closest('dialog').close()">Cancelar</button>
+      <button type="submit" class="btn">Salvar</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+function openFonteConfig(id, nome) {
+  document.getElementById('fonte-config-nome').textContent = nome;
+  document.getElementById('form-fonte-config').action =
+    '/projetos/{{ project.slug }}/fontes/' + id + '/config';
+  document.querySelector('#dlg-fonte-config input[name=api_key]').value = '';
+  document.getElementById('dlg-fonte-config').showModal();
+}
+</script>
+{% endblock %}

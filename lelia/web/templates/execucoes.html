@@ -1,0 +1,477 @@
+{% extends "base.html" %}
+{% block topbar %}{{ project.name }} — Execuções{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>Execuções do agente</h1>
+  <p class="muted"><a href="/projetos/{{ project.slug }}/agente/pipeline">← Pipeline</a> · <a href="/projetos/{{ project.slug }}/agente/modelos">Modelos LLM</a></p>
+</div>
+
+<div class="grid-2">
+  <div class="card">
+    <h2 class="card-title">Nova execução</h2>
+    <form method="post" action="/projetos/{{ project.slug }}/agente/execucoes/nova" class="form-grid">
+      <label class="span2">Agente
+        <select name="agent_id">
+          <option value="todos">Todos os agentes ativos</option>
+          {% for a in agents %}<option value="{{ a.id }}">{{ a.name }}{% if a.is_default %} (padrão){% endif %}</option>{% endfor %}
+        </select>
+        <span class="field-hint">"Todos os agentes" dispara uma execução por agente, em paralelo.</span>
+      </label>
+      <label>Máx. iterações
+        <input type="number" name="max_iterations" value="1" min="1" max="50">
+        <span class="field-hint">Padrão 1. O agente para antes se convergir (0 artigos novos).</span>
+      </label>
+      <label>Máx. artigos por consulta
+        <input type="number" name="max_papers" min="1" placeholder="Sem limite">
+        <span class="field-hint">Vazio = busca todos os resultados dentro do período de cobertura da configuração.</span>
+      </label>
+      <label>Limite de custo (USD)
+        <input type="number" name="max_cost_usd" min="0" step="0.5" placeholder="Sem limite">
+        <span class="field-hint">Vazio = sem limite (recomendado para modelos locais). 0 = bloqueia qualquer custo de LLM — útil só com teto explícito.</span>
+      </label>
+      <div class="span2">
+        <button class="btn btn-primary" type="submit">Iniciar execução</button>
+      </div>
+    </form>
+
+    <h2 class="card-title">Agendamento</h2>
+    <form method="post" action="/projetos/{{ project.slug }}/agente/execucoes/agendamento" class="form-inline">
+      <select name="frequency">
+        <option value="manual" {% if not schedule or schedule.frequency == 'manual' %}selected{% endif %}>Manual</option>
+        <option value="diaria" {% if schedule and schedule.frequency == 'diaria' %}selected{% endif %}>Diária</option>
+        <option value="semanal" {% if schedule and schedule.frequency == 'semanal' %}selected{% endif %}>Semanal</option>
+      </select>
+      <label class="check"><input type="checkbox" name="enabled" {% if schedule and schedule.enabled %}checked{% endif %}> Ativo</label>
+      <button class="btn btn-sm" type="submit">Salvar</button>
+    </form>
+    <p class="muted small">O worker verifica os agendamentos a cada minuto e dispara execuções automáticas (diária/semanal).</p>
+  </div>
+
+  <div class="card">
+    <h2 class="card-title">Execuções em andamento</h2>
+    {% if active_runs %}
+    <table class="table">
+      <thead><tr><th>#</th><th>Agente</th><th>Status</th><th>Início</th><th></th></tr></thead>
+      <tbody>
+        {% for r in active_runs %}
+        <tr>
+          <td><a href="?run={{ r.id }}"><strong>#{{ r.id }}</strong></a></td>
+          <td class="muted small">{{ agent_names.get(r.agent_id, '—') }}</td>
+          <td><span class="badge badge-{{ 'pausado' if r.status in ('executando','pendente','pausado') else 'arquivado' }}" data-run-badge="{{ r.id }}">{{ r.status }}</span></td>
+          <td class="muted small">{{ r.started_at.strftime('%d/%m %H:%M') if r.started_at else '—' }}</td>
+          <td class="actions">
+            {% if r.status in ('pendente','pausado') %}<form method="post" action="/projetos/{{ project.slug }}/agente/execucoes/{{ r.id }}/iniciar" class="inline"><button class="btn btn-ghost btn-sm">Iniciar</button></form>{% endif %}
+            {% if r.status == 'executando' %}<form method="post" action="/projetos/{{ project.slug }}/agente/execucoes/{{ r.id }}/pausar" class="inline"><button class="btn btn-ghost btn-sm">Pausar</button></form>{% endif %}
+            {% if r.status in ('executando','pausado','pendente') %}<form method="post" action="/projetos/{{ project.slug }}/agente/execucoes/{{ r.id }}/cancelar" class="inline"><button class="btn btn-ghost btn-sm">Cancelar</button></form>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="muted">Nenhuma execução em andamento.</p>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card live-monitor" id="live-monitor">
+  <div class="live-head">
+    <h2 class="card-title" style="margin:0">Monitor ao vivo</h2>
+    <span id="live-dot" class="live-pill"><span class="live-dot"></span><span id="live-dot-txt">conectando…</span></span>
+  </div>
+
+  <div class="live-now" id="live-now">
+    <div class="live-now-item"><span class="live-now-label">Agente</span><span class="live-now-val" id="lv-agent">—</span></div>
+    <div class="live-now-sep"></div>
+    <div class="live-now-item"><span class="live-now-label">Run</span><span class="live-now-val" id="lv-run">—</span></div>
+    <div class="live-now-sep"></div>
+    <div class="live-now-item"><span class="live-now-label">Iteração</span><span class="live-now-val" id="lv-iter">—</span></div>
+    <div class="live-now-sep"></div>
+    <div class="live-now-item live-now-task"><span class="live-now-label">Tarefa atual</span><span class="live-now-val" id="lv-task">—</span></div>
+  </div>
+
+  <div class="live-chips">
+    <span class="live-chip">+<b id="lv-papers">0</b> artigos</span>
+    <span class="live-chip">+<b id="lv-queries">0</b> consultas</span>
+    <span class="live-chip">+<b id="lv-terms">0</b> termos</span>
+    <span class="live-chip warn" id="lv-errors" style="display:none">⚠ <b id="lv-errors-n">0</b> erros</span>
+  </div>
+
+  <h3 class="live-feed-title">Atividade</h3>
+  <ul id="live-log" class="live-feed">
+    <li class="live-empty muted">Aguardando eventos…</li>
+  </ul>
+</div>
+
+<div class="card">
+  <h2 class="card-title">Histórico de execuções</h2>
+  <h3 class="card-title" style="font-size:14px">Concluídas <span class="muted small">({{ hist_total }})</span></h3>
+  <table class="table">
+    <thead><tr><th>#</th><th>Agente</th><th>Status</th><th>Início</th><th>Fim</th><th></th></tr></thead>
+    <tbody>
+      {% for r in runs %}
+      <tr class="run-row" data-run="{{ r.id }}" title="Ver histórico desta execução">
+        <td><strong>#{{ r.id }}</strong></td>
+        <td class="muted small">{{ agent_names.get(r.agent_id, '—') }}</td>
+        <td><span class="badge badge-{{ 'ativo' if r.status == 'concluida' else 'arquivado' }}" data-run-badge="{{ r.id }}">{{ r.status }}</span></td>
+        <td class="muted small">{{ r.started_at.strftime('%d/%m %H:%M') if r.started_at else '—' }}</td>
+        <td class="muted small">{{ r.finished_at.strftime('%d/%m %H:%M') if r.finished_at else '—' }}</td>
+        <td class="actions">
+          {% if r.status in ('concluida','falha','cancelada') %}<form method="post" action="/projetos/{{ project.slug }}/agente/execucoes/{{ r.id }}/reexecutar" class="inline"><button class="btn btn-ghost btn-sm">Reexecutar</button></form>{% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="empty">Nenhuma execução concluída ainda.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% if hist_pages > 1 %}
+  {% set win = 2 %}
+  {% set pstart = [1, hist_page - win] | max %}
+  {% set pend = [hist_pages, hist_page + win] | min %}
+  <div class="pagination">
+    <a class="btn btn-ghost btn-sm" href="?page=1" {% if hist_page == 1 %}style="opacity:.4;pointer-events:none"{% endif %}>« Primeira</a>
+    <a class="btn btn-ghost btn-sm" href="?page={{ hist_page - 1 }}" {% if hist_page == 1 %}style="opacity:.4;pointer-events:none"{% endif %}>‹ Anterior</a>
+    {% if pstart > 1 %}<span class="muted small">…</span>{% endif %}
+    {% for p in range(pstart, pend + 1) %}
+      {% if p == hist_page %}<span class="btn btn-sm btn-primary">{{ p }}</span>
+      {% else %}<a class="btn btn-ghost btn-sm" href="?page={{ p }}">{{ p }}</a>{% endif %}
+    {% endfor %}
+    {% if pend < hist_pages %}<span class="muted small">…</span>{% endif %}
+    <a class="btn btn-ghost btn-sm" href="?page={{ hist_page + 1 }}" {% if hist_page == hist_pages %}style="opacity:.4;pointer-events:none"{% endif %}>Próxima ›</a>
+    <a class="btn btn-ghost btn-sm" href="?page={{ hist_pages }}" {% if hist_page == hist_pages %}style="opacity:.4;pointer-events:none"{% endif %}>Última »</a>
+  </div>
+  {% endif %}
+</div>
+
+{% if selected %}
+<div class="card">
+  <h2 class="card-title">Run #{{ selected.id }} — {{ selected.status }}</h2>
+  <p class="muted small">Config: <code>{{ selected.config_snapshot }}</code></p>
+
+  {% if run_totals %}
+  {% set st = run_totals.stats %}
+  {% set stat_labels = {'new_papers': 'artigos novos', 'screened': 'triados (título/resumo)', 'deep_screened': 'triados (texto completo)', 'analyzed': 'análises profundas', 'classified': 'classificados', 'acquired': 'PDFs adquiridos', 'enriched': 'enriquecidos', 'merged': 'duplicados mesclados', 'concepts': 'conceitos', 'concepts_papers': 'artigos p/ conceitos', 'snowball_papers': 'artigos semente (snowball)', 'snowball_refs': 'referências listadas', 'snowball_known': 'referências já na base', 'snowball_new': 'referências novas', 'queries': 'consultas', 'new_terms': 'termos novos', 'duplicates': 'registros duplicados', 'results': 'registros', 'queries_created': 'consultas criadas', 'terms_suggested': 'termos sugeridos', 'dup_alerts': 'alertas de duplicata'} %}
+  <div class="live-chips" style="margin-bottom:10px">
+    <span class="live-chip">{{ run_totals.iterations }} iteração(ões)</span>
+    <span class="live-chip">{{ run_totals.tasks_ok }} tarefas ok</span>
+    {% if run_totals.tasks_error %}<span class="live-chip warn">{{ run_totals.tasks_error }} tarefa(s) com erro</span>{% endif %}
+    {% if run_totals.errors %}<span class="live-chip warn">⚠ {{ run_totals.errors }} erro(s)</span>{% endif %}
+    {% for k, v in st.items() %}
+    <span class="live-chip"><b>{{ '%g' | format(v) }}</b> {{ stat_labels.get(k, k) }}</span>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <h3 class="card-title" style="font-size:14px">Histórico de ações <span class="muted small">({{ run_events|length }} eventos)</span></h3>
+  <div style="overflow-x:auto;max-height:480px;overflow-y:auto">
+  <table class="table">
+    <thead><tr><th style="width:90px">Hora</th><th style="width:50px">Iter</th><th style="width:150px">Evento</th><th>Detalhe</th></tr></thead>
+    <tbody>
+      {% for ev in run_events %}
+      <tr class="ev-row" data-eid="{{ ev.id }}" title="Clique para ver detalhes">
+        <td class="muted small" style="white-space:nowrap">{{ ev.created_at.strftime('%d/%m %H:%M:%S') if ev.created_at else '—' }}</td>
+        <td class="muted small">{{ ev.iteration or '—' }}</td>
+        <td><span class="badge badge-{{ 'arquivado' if 'error' in ev.type or (ev.detail and 'ERRO' in ev.detail) else 'ativo' }}">{{ ev.label }}</span></td>
+        <td class="small" style="white-space:pre-wrap;word-break:break-word">{{ ev.detail or '—' }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" class="empty">Nenhum evento registrado para esta execução.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+
+  <h3 class="card-title" style="font-size:14px;margin-top:14px">Iterações</h3>
+  <table class="table">
+    <thead><tr><th>Iteração</th><th>Status</th><th>Consultas</th><th>Artigos novos</th><th>Termos novos</th></tr></thead>
+    <tbody>
+      {% for it in iterations %}
+      <tr>
+        <td>#{{ it.number }}</td>
+        <td>{{ it.status }}</td>
+        <td>{{ it.queries_count }}</td>
+        <td>{{ it.new_papers }}</td>
+        <td>{{ it.new_terms }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="empty">Nenhuma iteração registrada.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<dialog id="ev-modal" class="modal ev-modal">
+  <div class="modal-head">
+    <h2 id="ev-modal-title">Evento</h2>
+    <button type="button" class="btn-ghost" onclick="document.getElementById('ev-modal').close()">✕</button>
+  </div>
+  <div id="ev-modal-body" class="ev-modal-body"></div>
+</dialog>
+{% endif %}
+<script>
+(function () {
+  var es = new EventSource('/projetos/{{ project.slug }}/agente/eventos');
+  var dot = document.getElementById('live-dot');
+  var dotTxt = document.getElementById('live-dot-txt');
+  var log = document.getElementById('live-log');
+  var cur = {}, statsRun = {}, errRun = {};
+
+  function setText(id, v) { document.getElementById(id).textContent = v; }
+  function badgeClass(st) {
+    return st === 'concluida' ? 'ativo' : (st === 'executando' || st === 'pendente' ? 'pausado' : 'arquivado');
+  }
+  var ICONS = {
+    'run.started': '▶', 'run.status': '●', 'run.error': '✕',
+    'iteration.started': '↻', 'iteration.finished': '✓',
+    'task.started': '⚙', 'task.finished': '✓', 'task.error': '✕', 'task.skipped': '–',
+    'task.progress': '…',
+    'query.started': '⌕', 'query.progress': '…', 'query.finished': '✓',
+    'llm.in': '⇢', 'llm.out': '⇠'
+  };
+  var LABELS = {
+    'run.started': 'execução iniciada', 'run.status': 'status', 'run.error': 'erro fatal',
+    'iteration.started': 'iteração iniciada', 'iteration.finished': 'iteração concluída',
+    'task.started': 'tarefa iniciada', 'task.finished': 'tarefa concluída',
+    'task.error': 'erro na tarefa', 'task.skipped': 'tarefa ignorada',
+    'task.progress': 'progresso',
+    'query.started': 'consulta iniciada', 'query.progress': 'busca em andamento',
+    'query.finished': 'consulta concluída',
+    'llm.in': 'LLM →', 'llm.out': 'LLM ←'
+  };
+  function shortExpr(e) {
+    e = e || '';
+    return e.length > 60 ? e.slice(0, 60) + '…' : e;
+  }
+  function feedLine(ev) {
+    if (log.querySelector('.live-empty')) log.innerHTML = '';
+    var li = document.createElement('li');
+    li.className = 'live-item ev-' + ev.type.replace('.', '-');
+    var t = new Date(ev.ts * 1000).toLocaleTimeString();
+    var desc = '';
+    if (ev.type === 'run.started') desc = ev.agent || '';
+    else if (ev.type === 'run.status') desc = ev.status + (ev.agent ? ' · ' + ev.agent : '');
+    else if (ev.type === 'iteration.started') desc = 'iteração ' + ev.number + '/' + ev.max_iterations;
+    else if (ev.type === 'iteration.finished') {
+      var st = ev.stats || {};
+      desc = (st.new_papers || 0) + ' artigos · ' + (st.queries || 0) + ' consultas · ' + (st.new_terms || 0) + ' termos'
+        + ((st.duplicates || 0) ? ' · ' + st.duplicates + ' dup' : '')
+        + ((st.screened || 0) ? ' · ' + st.screened + ' triados' : '')
+        + ((st.errors || []).length ? ' · ' + st.errors.length + ' erros' : '');
+    }
+    else if (ev.type === 'task.progress') desc = ev.message || '';
+    else if (ev.type.indexOf('task.') === 0) desc = (ev.task_name || ev.task_type) + (ev.error ? ': ' + ev.error : (ev.reason ? ': ' + ev.reason : ''));
+    else if (ev.type === 'query.started') desc = '#' + ev.query_id + ' · ' + shortExpr(ev.expression) + ((ev.sources || []).length ? ' · ' + ev.sources.join(', ') : '');
+    else if (ev.type === 'query.progress') desc = (ev.source || '') + ' · pág. ' + ev.page + (ev.total ? ' · ' + ev.fetched + '/' + ev.total + ' registros' : ' · ' + ev.fetched + ' registros');
+    else if (ev.type === 'query.finished') desc = shortExpr(ev.expression) + ' · +' + (ev.new || 0) + ' novos · +' + (ev.duplicates || 0) + ' dup' + ((ev.errors || []).length ? ' · ' + ev.errors.length + ' erro(s)' : '') + ' · ' + ((ev.duration_ms || 0) / 1000).toFixed(1) + 's';
+    else if (ev.type === 'run.error') desc = ev.error || '';
+    else if (ev.type === 'llm.in') {
+      desc = (ev.model || '') + (ev.paper_id ? ' · artigo #' + ev.paper_id : '')
+        + ' · prompt ' + (ev.prompt || '').length + ' chars';
+    }
+    else if (ev.type === 'llm.out') {
+      desc = (ev.model || '') + (ev.paper_id ? ' · artigo #' + ev.paper_id : '')
+        + ' · ' + (ev.tokens_in || 0) + '→' + (ev.tokens_out || 0) + ' tok'
+        + (ev.error ? ' · ERRO: ' + ev.error : '');
+    }
+    li.innerHTML = '<span class="live-ico">' + (ICONS[ev.type] || '•') + '</span>'
+      + '<span class="live-txt"><b>' + (LABELS[ev.type] || ev.type) + '</b> — ' + desc + '</span>'
+      + '<span class="live-time">' + t + '</span>';
+    log.prepend(li);
+    while (log.children.length > 50) log.removeChild(log.lastChild);
+  }
+  function snap(rid) {
+    var c = cur[rid]; if (!c) return;
+    var st = statsRun[rid] || {};
+    setText('lv-agent', c.agent || '—');
+    setText('lv-run', '#' + rid);
+    setText('lv-iter', c.iter !== undefined ? c.iter : '—');
+    setText('lv-task', (c.task || '—') + (c.query ? ' · ' + c.query : ''));
+    setText('lv-papers', st.new_papers || 0);
+    setText('lv-queries', st.queries || 0);
+    setText('lv-terms', st.new_terms || 0);
+    var ne = errRun[rid] || 0;
+    var ec = document.getElementById('lv-errors');
+    ec.style.display = ne ? '' : 'none';
+    setText('lv-errors-n', ne);
+  }
+
+  es.onopen = function () {
+    dot.className = 'live-pill live-on';
+    dotTxt.textContent = 'ao vivo';
+  };
+  es.onerror = function () {
+    dot.className = 'live-pill';
+    dotTxt.textContent = 'reconectando…';
+  };
+  es.onmessage = function (m) {
+    var ev; try { ev = JSON.parse(m.data); } catch (e) { return; }
+    var rid = ev.run_id;
+    if (ev.type === 'run.started') {
+      cur[rid] = { agent: ev.agent || 'agente ' + (ev.agent_id || '?'), iter: '—', task: '—' };
+      statsRun[rid] = {}; errRun[rid] = 0;
+      snap(rid); feedLine(ev);
+    } else if (ev.type === 'iteration.started') {
+      if (!cur[rid]) cur[rid] = {};
+      cur[rid].iter = ev.number + '/' + ev.max_iterations;
+      cur[rid].task = '—'; statsRun[rid] = {};
+      snap(rid); feedLine(ev);
+    } else if (ev.type === 'task.started') {
+      if (!cur[rid]) cur[rid] = {};
+      cur[rid].task = ev.task_name || ev.task_type;
+      snap(rid); feedLine(ev);
+    } else if (ev.type === 'task.finished') {
+      statsRun[rid] = ev.stats || {};
+      snap(rid); feedLine(ev);
+    } else if (ev.type === 'task.error') {
+      errRun[rid] = (errRun[rid] || 0) + 1;
+      snap(rid); feedLine(ev);
+    } else if (ev.type === 'query.started') {
+      if (!cur[rid]) cur[rid] = {};
+      cur[rid].query = '#' + ev.query_id;
+      snap(rid); feedLine(ev);
+    } else if (ev.type === 'query.progress' || ev.type === 'query.finished') {
+      feedLine(ev);
+      if (ev.type === 'query.finished') { if (cur[rid]) cur[rid].query = ''; snap(rid); }
+    } else if (ev.type === 'task.progress') {
+      feedLine(ev);
+      if (cur[rid]) { cur[rid].task = (ev.message || '').slice(0, 90); snap(rid); }
+    } else if (ev.type === 'task.skipped') {
+      feedLine(ev);
+    } else if (ev.type === 'iteration.finished') {
+      statsRun[rid] = ev.stats || {};
+      errRun[rid] = ((ev.stats || {}).errors || []).length;
+      snap(rid); feedLine(ev);
+    } else if (ev.type === 'run.status') {
+      var b = document.querySelector('[data-run-badge="' + rid + '"]');
+      if (b) { b.textContent = ev.status; b.className = 'badge badge-' + badgeClass(ev.status); }
+      if (ev.status === 'concluida' || ev.status === 'falha' || ev.status === 'cancelada') {
+        if (cur[rid]) { cur[rid].task = '—'; cur[rid].iter = 'fim'; }
+      }
+      snap(rid); feedLine(ev);
+    } else if (ev.type === 'run.error' || ev.type === 'llm.in' || ev.type === 'llm.out') {
+      feedLine(ev);
+    }
+  };
+
+  // clique na linha do histórico de execuções abre o detalhe da run
+  document.querySelectorAll('tr.run-row').forEach(function (tr) {
+    tr.addEventListener('click', function (e) {
+      if (e.target.closest('a, button, form')) return;
+      location.href = '?page={{ hist_page }}&run=' + tr.getAttribute('data-run');
+    });
+  });
+})();
+</script>
+<script>
+(function () {
+  var RUN_ID = {{ selected.id if selected else 0 }};
+  var modal = document.getElementById('ev-modal');
+  if (!modal || !RUN_ID) return;
+  var body = document.getElementById('ev-modal-body');
+  var title = document.getElementById('ev-modal-title');
+  modal.addEventListener('click', function (e) {
+    if (e.target === modal) modal.close();
+  });
+
+  var SKIP = {ts: 1, type: 1, label: 1, created_at: 1, id: 1};
+  var NAMES = {
+    run_id: 'Execução', iteration: 'Iteração', task: 'Tarefa',
+    task_type: 'Tipo de tarefa', task_name: 'Tarefa', model: 'Modelo',
+    model_ref: 'Modelo', paper_id: 'Artigo', schema: 'Schema',
+    prompt: 'Prompt enviado', response: 'Resposta do modelo',
+    error: 'Erro', reason: 'Motivo', status: 'Status', agent: 'Agente',
+    agent_id: 'Agente', number: 'Iteração', max_iterations: 'Máx. iterações',
+    expression: 'Expressão', source: 'Fonte', sources: 'Fontes',
+    query_id: 'Consulta', page: 'Página', fetched: 'Registros', total: 'Total',
+    new: 'Novos', duplicates: 'Duplicados', duration_ms: 'Duração (ms)',
+    stats: 'Estatísticas', errors: 'Erros', message: 'Mensagem',
+    tokens_in: 'Tokens de entrada', tokens_out: 'Tokens de saída',
+    cost_usd: 'Custo (USD)', prompt_template: 'Template de prompt',
+    prompt_version: 'Versão do template'
+  };
+
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+  function humanize(k) { return NAMES[k] || k.replace(/_/g, ' '); }
+  function tryPretty(v) {
+    if (typeof v !== 'string') return null;
+    var t = v.trim();
+    if ((t[0] === '{' && t[t.length - 1] === '}') ||
+        (t[0] === '[' && t[t.length - 1] === ']')) {
+      try { return JSON.stringify(JSON.parse(t), null, 2); } catch (e) {}
+    }
+    return null;
+  }
+  function fieldHtml(k, v) {
+    var pretty = tryPretty(v);
+    var isLong = pretty || (typeof v === 'string' && (v.length > 160 || v.indexOf('\n') >= 0));
+    var val;
+    if (k === 'error' && v) {
+      val = '<pre class="ev-pre ev-pre-err">' + esc(v) + '</pre>';
+    } else if (isLong) {
+      val = '<pre class="ev-pre">' + esc(pretty || v) + '</pre>';
+    } else if (typeof v === 'object' && v !== null) {
+      val = '<pre class="ev-pre">' + esc(JSON.stringify(v, null, 2)) + '</pre>';
+    } else {
+      val = '<span class="ev-val">' + esc(v) + '</span>';
+    }
+    return '<div class="ev-field"><div class="ev-field-label">' + esc(humanize(k)) +
+           '</div><div class="ev-field-value">' + val + '</div></div>';
+  }
+
+  function render(ev) {
+    var when = ev.created_at ? new Date(ev.created_at).toLocaleString('pt-BR') : '';
+    title.innerHTML = esc(ev.label || ev.type || 'Evento') +
+      ' <span class="muted small">' + esc(when) + '</span>';
+    var html = '';
+    // chips de resumo
+    var chips = [];
+    if (ev.iteration) chips.push('iteração ' + ev.iteration);
+    if (ev.model) chips.push('modelo: ' + ev.model);
+    if (ev.paper_id) chips.push('artigo #' + ev.paper_id);
+    if (ev.task || ev.task_type) chips.push('tarefa: ' + (ev.task_name || ev.task_type || ev.task));
+    if (ev.tokens_in != null) chips.push(ev.tokens_in + '→' + (ev.tokens_out || 0) + ' tokens');
+    if (ev.cost_usd != null) chips.push('US$ ' + Number(ev.cost_usd).toFixed(4));
+    if (chips.length) {
+      html += '<div class="ev-chips">' + chips.map(function (c) {
+        return '<span class="live-chip">' + esc(c) + '</span>';
+      }).join('') + '</div>';
+    }
+    // ordem: campos conhecidos primeiro, resto depois
+    var keys = Object.keys(ev).filter(function (k) { return !SKIP[k]; });
+    keys.sort(function (a, b) {
+      var order = ['model', 'paper_id', 'task', 'task_type', 'task_name',
+                   'schema', 'prompt', 'response', 'error', 'reason',
+                   'status', 'tokens_in', 'tokens_out', 'cost_usd'];
+      var ia = order.indexOf(a), ib = order.indexOf(b);
+      return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || a.localeCompare(b);
+    });
+    html += keys.map(function (k) { return fieldHtml(k, ev[k]); }).join('');
+    body.innerHTML = html || '<p class="muted">Sem dados adicionais.</p>';
+    modal.showModal();
+  }
+
+  document.querySelectorAll('tr.ev-row').forEach(function (tr) {
+    tr.addEventListener('click', function () {
+      var eid = tr.getAttribute('data-eid');
+      if (!eid) return;
+      body.innerHTML = '<p class="muted">Carregando…</p>';
+      title.textContent = 'Evento';
+      modal.showModal();
+      fetch('/projetos/{{ project.slug }}/agente/execucoes/' + RUN_ID +
+            '/evento/' + eid)
+        .then(function (r) { return r.json(); })
+        .then(function (ev) {
+          if (ev.error) { body.innerHTML = '<p class="muted">' + esc(ev.error) + '</p>'; return; }
+          render(ev);
+        })
+        .catch(function () { body.innerHTML = '<p class="muted">Falha ao carregar evento.</p>'; });
+    });
+  });
+})();
+</script>
+{% endblock %}

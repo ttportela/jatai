@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block topbar %}Histórico{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>Histórico e auditoria</h1>
+  <p class="muted">Trilha append-only de todas as operações do sistema. Eventos nunca são alterados ou removidos. Clique em um registro para ver o detalhe completo.</p>
+</div>
+
+<div class="card">
+  <table class="table">
+    <thead>
+      <tr><th>Timestamp</th><th>Tipo</th><th>Entidade</th><th>Operação</th><th>Origem</th><th>Projeto</th><th>Dados</th></tr>
+    </thead>
+    <tbody>
+      {% for e in events %}
+      <tr class="ev-row" data-eid="{{ e.id }}" title="Clique para ver detalhes">
+        <td class="muted">{{ e.ts.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+        <td><code>{{ e.type }}</code></td>
+        <td>{{ e.entity }}</td>
+        <td>{{ e.operation }}</td>
+        <td>{{ e.origin }}</td>
+        <td>{% if e.project_slug %}<a href="/projetos/{{ e.project_slug }}">{{ e.project_slug }}</a>{% endif %}</td>
+        <td class="muted small" style="max-width:560px;white-space:pre-wrap;word-break:break-word">{{ e.payload[:300] }}{% if e.payload|length > 300 %}…{% endif %}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="empty">Nenhum evento registrado.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<dialog id="ev-modal" class="modal ev-modal">
+  <div class="modal-head">
+    <h2 id="ev-modal-title">Evento</h2>
+    <button type="button" class="btn-ghost" onclick="document.getElementById('ev-modal').close()">✕</button>
+  </div>
+  <div id="ev-modal-body" class="ev-modal-body"></div>
+</dialog>
+
+<script>
+(function () {
+  var modal = document.getElementById('ev-modal');
+  var body = document.getElementById('ev-modal-body');
+  var title = document.getElementById('ev-modal-title');
+  modal.addEventListener('click', function (e) {
+    if (e.target === modal) modal.close();
+  });
+
+  var NAMES = {
+    type: 'Tipo', entity: 'Entidade', operation: 'Operação', origin: 'Origem',
+    project_slug: 'Projeto', ts: 'Timestamp', id: 'ID',
+    model: 'Modelo', tokens_in: 'Tokens de entrada', tokens_out: 'Tokens de saída',
+    cost_usd: 'Custo (USD)', error: 'Erro', status: 'Status', detail: 'Detalhe'
+  };
+
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+  function fieldHtml(k, v) {
+    var isObj = v !== null && typeof v === 'object';
+    var isLong = isObj || (typeof v === 'string' && (v.length > 160 || v.indexOf('\n') >= 0));
+    var val;
+    if (k === 'error' && v) {
+      val = '<pre class="ev-pre ev-pre-err">' + esc(typeof v === 'string' ? v : JSON.stringify(v, null, 2)) + '</pre>';
+    } else if (isLong) {
+      val = '<pre class="ev-pre">' + esc(JSON.stringify(v, null, 2)) + '</pre>';
+    } else {
+      val = '<span class="ev-val">' + esc(v) + '</span>';
+    }
+    return '<div class="ev-field"><div class="ev-field-label">' +
+      esc(NAMES[k] || k.replace(/_/g, ' ')) + '</div><div class="ev-field-value">' +
+      val + '</div></div>';
+  }
+
+  function render(ev) {
+    var when = ev.ts ? new Date(ev.ts).toLocaleString('pt-BR') : '';
+    title.innerHTML = esc(ev.type || 'Evento') +
+      ' <span class="muted small">' + esc(when) + '</span>';
+    var chips = [];
+    if (ev.entity) chips.push('entidade: ' + ev.entity);
+    if (ev.operation) chips.push('operação: ' + ev.operation);
+    if (ev.origin) chips.push('origem: ' + ev.origin);
+    if (ev.project_slug) chips.push('projeto: ' + ev.project_slug);
+    var html = '';
+    if (chips.length) {
+      html += '<div class="ev-chips">' + chips.map(function (c) {
+        return '<span class="live-chip">' + esc(c) + '</span>';
+      }).join('') + '</div>';
+    }
+    // payload primeiro (é o conteúdo do evento), metadados depois
+    var p = ev.payload && typeof ev.payload === 'object' ? ev.payload : {};
+    html += Object.keys(p).map(function (k) { return fieldHtml(k, p[k]); }).join('');
+    ['id', 'type', 'entity', 'operation', 'origin', 'project_slug', 'ts']
+      .forEach(function (k) {
+        if (ev[k] != null && ev[k] !== '') html += fieldHtml(k, ev[k]);
+      });
+    body.innerHTML = html || '<p class="muted">Sem dados.</p>';
+    modal.showModal();
+  }
+
+  document.querySelectorAll('tr.ev-row').forEach(function (tr) {
+    tr.addEventListener('click', function (e) {
+      if (e.target.tagName === 'A') return;
+      var eid = tr.getAttribute('data-eid');
+      if (!eid) return;
+      body.innerHTML = '<p class="muted">Carregando…</p>';
+      title.textContent = 'Evento';
+      modal.showModal();
+      fetch('/sistema/historico/' + eid)
+        .then(function (r) { return r.json(); })
+        .then(function (ev) {
+          if (ev.error) { body.innerHTML = '<p class="muted">' + esc(ev.error) + '</p>'; return; }
+          render(ev);
+        })
+        .catch(function () { body.innerHTML = '<p class="muted">Falha ao carregar evento.</p>'; });
+    });
+  });
+})();
+</script>
+{% endblock %}

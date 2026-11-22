@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% block topbar %}{{ project.name }} — Consultas{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>Consultas bibliográficas</h1>
+  <p class="muted">Expressões de busca utilizadas nas fontes. <a href="/projetos/{{ project.slug }}">← voltar ao projeto</a></p>
+</div>
+
+<div class="card">
+  <h2 class="card-title">Nova consulta manual</h2>
+  <form method="post" action="/projetos/{{ project.slug }}/consultas/create" class="form-stack" id="form-consulta">
+    <input type="hidden" name="query_id" value="">
+    <label>Expressão de busca
+      <textarea name="expression" rows="3" required placeholder='("big data" OR "data analytics") AND (trajectory OR "movelets")'></textarea>
+    </label>
+    <div class="form-row">
+      <label>Fonte
+        <select name="source">
+          <option value="">— todas as fontes ativas —</option>
+          {% for s in sources %}<option value="{{ s.source_type }}">{{ s.name }}</option>{% endfor %}
+        </select>
+      </label>
+    </div>
+    <button class="btn" type="submit">Adicionar consulta</button>
+    <button type="button" class="btn btn-ghost js-cancel hidden" onclick="document.getElementById('form-consulta').reset();this.previousElementSibling.textContent='Adicionar consulta';var h=document.querySelector('#form-consulta [name=query_id]');if(h)h.value='';this.classList.add('hidden');">Cancelar edição</button>
+  </form>
+  <p class="muted small">Consultas geradas pelo agente aparecerão aqui com origem "agente"; expansões a partir de conceitos terão origem "expanded" e poderão exigir aprovação manual.</p>
+</div>
+
+{% if geradas %}<div class="notice notice-ok">{{ geradas }} consulta(s) gerada(s) a partir da configuração da pesquisa.</div>{% endif %}
+
+<div class="card">
+  <h2 class="card-title">Gerador de consultas <span class="muted small">(QueryDefinition → adaptadores de fonte)</span></h2>
+  {% if preview.logical %}
+  <p class="small"><strong>Expressão lógica:</strong> <code>{{ preview.logical }}</code></p>
+  <details>
+    <summary class="small">Pré-visualizar consultas por fonte</summary>
+    {% for src, exprs in preview.queries.items() %}
+    <h3 class="small" style="margin:10px 0 4px">{{ src }} ({{ exprs|length }})</h3>
+    <ul class="small" style="margin:0;padding-left:18px">
+      {% for e in exprs[:10] %}<li><code>{{ e }}</code></li>{% endfor %}
+      {% if exprs|length > 10 %}<li class="muted">… e mais {{ exprs|length - 10 }}</li>{% endif %}
+    </ul>
+    {% endfor %}
+  </details>
+  <form method="post" action="/projetos/{{ project.slug }}/consultas/gerar" class="form-inline" style="margin-top:12px">
+    <label class="small">Máx. por fonte <input type="number" name="max_per_source" value="25" min="1" max="100" style="width:70px"></label>
+    <button class="btn btn-sm" type="submit">Gerar consultas da configuração</button>
+  </form>
+  <p class="muted small">As consultas existentes não são duplicadas. O agente também gera automaticamente a cada iteração via tarefa "Geração de consultas".</p>
+  {% else %}
+  <p class="muted small">Cadastre áreas e palavras-chave na <a href="/projetos/{{ project.slug }}/configuracao">configuração da pesquisa</a> para gerar consultas automaticamente.</p>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2 class="card-title">Consultas cadastradas <span class="muted small">(a ordem da tabela é a ordem de execução pela tarefa de busca)</span></h2>
+  <table class="table">
+    <thead><tr><th>ID</th><th>Expressão</th><th>Fonte</th><th>Iteração</th><th>Origem</th><th>Status</th><th>Resultados</th><th>Criada em</th><th>Ativa</th><th></th></tr></thead>
+    <tbody>
+      {% for q in queries %}
+      <tr>
+        <td><code>#{{ q.id }}</code></td>
+        <td class="expr" {% if not q.enabled %}style="opacity:.5"{% endif %}>{{ q.expression }}</td>
+        <td>{{ q.source or '—' }}</td>
+        <td>{{ q.iteration or '—' }}</td>
+        <td><span class="badge badge-{{ 'ativo' if q.origin == 'manual' else 'arquivado' }}">{{ q.origin }}</span></td>
+        <td><span class="badge badge-{{ 'ativo' if q.status == 'aprovada' else 'arquivado' if q.status == 'erro' else 'pausado' }}">{{ q.status }}</span></td>
+        <td>{{ q.results_count }}
+          {% set exs = execucoes.get(q.id) %}
+          {% if exs %}
+          <details class="small" style="margin-top:4px">
+            <summary class="muted" style="cursor:pointer">{{ exs|length }} exec.</summary>
+            <ul style="margin:4px 0 0;padding-left:16px">
+              {% for e in exs %}
+              <li class="muted">
+                <code>{{ e.source }}</code>
+                <span class="badge badge-{{ 'ativo' if e.status == 'ok' else 'arquivado' if e.status == 'vazio' else 'pausado' }}">{{ e.status }}</span>
+                {{ e.results_count }} res. · +{{ e.new_count }} novos · +{{ e.duplicate_count }} dup
+                {% if e.filtered_count %}· {{ e.filtered_count }} fora da cobertura{% endif %}
+                · {{ (e.duration_ms / 1000)|round(1) }}s · {{ e.created_at.strftime('%d/%m %H:%M') if e.created_at else '' }}
+                {% if e.error %}<br><span style="color:var(--danger)">{{ e.error[:120] }}</span>{% endif %}
+              </li>
+              {% endfor %}
+            </ul>
+          </details>
+          {% endif %}
+        </td>
+        <td class="muted small">{{ q.created_at.strftime('%d/%m/%Y %H:%M') if q.created_at else '—' }}</td>
+        <td class="actions">
+          <form method="post" action="/projetos/{{ project.slug }}/consultas/{{ q.id }}/toggle" class="inline">
+          <button class="btn btn-ghost btn-sm" title="{{ 'Desativar para os agentes' if q.enabled else 'Ativar para os agentes' }}"
+            style="{{ 'color:var(--success)' if q.enabled else 'color:var(--muted);opacity:.45' }}">{{ '🟢' if q.enabled else '🔴' }}</button>
+          </form>
+          </td>
+        <td class="actions">
+          <span class="muted small" title="Ordem de execução">{{ loop.index }}º</span>
+          <div style="display: inline-grid;">
+          <form method="post" action="/projetos/{{ project.slug }}/consultas/{{ q.id }}/move" class="inline">
+            <input type="hidden" name="dir" value="up">
+            <button class="btn btn-ghost btn-sm" title="Mover para cima (executa antes)" {% if loop.first %}disabled{% endif %}>↑</button>
+          </form>
+          <form method="post" action="/projetos/{{ project.slug }}/consultas/{{ q.id }}/move" class="inline">
+            <input type="hidden" name="dir" value="down">
+            <button class="btn btn-ghost btn-sm" title="Mover para baixo (executa depois)" {% if loop.last %}disabled{% endif %}>↓</button>
+          </form>
+          </div>
+          <button type="button" class="btn btn-ghost btn-sm js-edit"
+            data-form="form-consulta" data-query_id="{{ q.id }}"
+            data-expression="{{ q.expression }}" data-source="{{ q.source or '' }}" title="Editar consulta">✎</button>
+          {% if q.origin != 'manual' and q.status == 'pendente' %}
+          <form method="post" action="/projetos/{{ project.slug }}/consultas/{{ q.id }}/approve" class="inline">
+            <button class="btn btn-ghost btn-sm" title="Aprovar consulta">✓</button>
+          </form>
+          {% endif %}
+          <form method="post" action="/projetos/{{ project.slug }}/consultas/{{ q.id }}/delete" class="inline"
+                onsubmit="return confirm('Remover esta consulta?');">
+            <button class="btn btn-danger btn-sm" title="Remover consulta">🗑</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="11" class="empty">Nenhuma consulta cadastrada.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<script>
+(function () {
+  document.querySelectorAll('.js-edit').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var form = document.getElementById(btn.dataset.form);
+      if (!form) return;
+      form.reset();
+      form.querySelectorAll('[name]').forEach(function (el) {
+        if (el.type === 'hidden') return;
+        var v = btn.dataset[el.name];
+        if (v !== undefined) el.value = v;
+      });
+      form.querySelector('[name=query_id]').value = btn.dataset.query_id;
+      var submit = form.querySelector('button[type="submit"]');
+      submit.textContent = 'Salvar alterações';
+      form.querySelector('.js-cancel').classList.remove('hidden');
+      form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  });
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,710 @@
+{% extends "base.html" %}
+{% block topbar %}{{ project.name }} — Publicação #{{ paper.id }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>{{ paper.title }}</h1>
+  <p class="muted">
+    {% if authors %}{{ authors | join(', ') }} · {% endif %}
+    {{ paper.year or '—' }} · <code>{{ paper.source }}</code>
+    {% if paper.doi %}· <a href="https://doi.org/{{ paper.doi }}" target="_blank" rel="noopener">DOI</a>{% endif %}
+    {% if paper.url %}· <a href="{{ paper.url }}" target="_blank" rel="noopener">Fonte</a>{% endif %}
+    {% if paper.pdf_path %}· <a href="/projetos/{{ project.slug }}/publicacoes/{{ paper.id }}/pdf-view" target="_blank" rel="noopener">📑 PDF</a>{% endif %}
+  </p>
+</div>
+
+<div class="tabs">
+  <button class="tab active" data-tab="informacoes">Informações</button>
+  <button class="tab" data-tab="analise">Análise</button>
+  <button class="tab" data-tab="questoes">Questões</button>
+  <button class="tab" data-tab="evidencias">Evidências</button>
+  <button class="tab" data-tab="classificacao">Classificação</button>
+  <button class="tab" data-tab="conceitos">Conceitos</button>
+  <button class="tab" data-tab="qualidade">Qualidade</button>
+  <button class="tab" data-tab="decisoes">Decisões</button>
+  <button class="tab" data-tab="proveniencia">Proveniência</button>
+</div>
+
+<section class="tab-pane" id="tab-informacoes">
+  <div class="grid-2">
+    <div class="card">
+      <h2 class="card-title">Metadados</h2>
+      <table class="kv">
+        <tr><td>Título</td><td>{{ paper.title }}</td></tr>
+        <tr><td>Autores</td><td>{{ authors | join(', ') or '—' }}</td></tr>
+        <tr><td>Ano</td><td>{{ paper.year or '—' }}</td></tr>
+        <tr><td>DOI</td><td>{% if paper.doi %}<a href="https://doi.org/{{ paper.doi }}" target="_blank" rel="noopener">{{ paper.doi }}</a>{% else %}—{% endif %}</td></tr>
+        <tr><td>Fonte</td><td>{{ paper.source }}</td></tr>
+        <tr><td>Periódico/evento</td><td>{{ paper.venue or '—' }}</td></tr>
+        <tr><td>Tipo</td><td>{{ paper.pub_type or '—' }}</td></tr>
+        <tr><td>Palavras-chave</td><td>{{ paper.keywords or '—' }}</td></tr>
+        <tr><td>Estado</td><td><span class="badge badge-{{ 'ativo' if paper.state == 'incluido' else 'arquivado' if paper.state == 'excluido' else 'pausado' if paper.state == 'talvez' else 'novo' }}">{{ paper.state }}</span></td></tr>
+      </table>
+      {% if paper.abstract %}
+      <h3 class="card-title">Resumo</h3>
+      <p class="muted">{{ paper.abstract }}</p>
+      {% endif %}
+    </div>
+    <div class="card">
+      <h2 class="card-title">Triagem manual</h2>
+      <form method="post" action="/projetos/{{ project.slug }}/publicacoes/{{ paper.id }}/estado" class="form-stack">
+        <label>Decisão
+          <select name="state">
+            {% for s in states %}<option value="{{ s.value }}" {% if paper.state == s.value %}selected{% endif %}>{{ s.label }}</option>{% endfor %}
+          </select>
+        </label>
+        <label>Comentário <input type="text" name="comment" placeholder="opcional"></label>
+        <button class="btn btn-sm" type="submit">Registrar decisão</button>
+      </form>
+      <p class="muted small">A decisão do agente nunca é apagada — intervenções humanas são registradas como novas versões (HumanIntervention).</p>
+    </div>
+  </div>
+  {% if paper.pdf_path %}
+  <div class="card" style="margin-top:16px">
+    <h2 class="card-title">Documento</h2>
+    <p class="muted small">PDF disponível: <code>{{ paper.pdf_path }}</code> · <a href="/projetos/{{ project.slug }}/publicacoes/{{ paper.id }}/pdf-view" target="_blank" rel="noopener">abrir visualizador</a></p>
+  </div>
+  {% else %}
+  <div class="card" style="margin-top:16px">
+    <h2 class="card-title">Documento</h2>
+    <p class="muted small">Nenhum PDF associado. Faça upload manual ou aguarde aquisição de acesso aberto.</p>
+    <form method="post" action="/projetos/{{ project.slug }}/publicacoes/{{ paper.id }}/pdf" enctype="multipart/form-data" class="form-inline">
+      <input type="file" name="file" accept=".pdf" required>
+      <button class="btn" type="submit">Enviar PDF</button>
+    </form>
+  </div>
+  {% endif %}
+</section>
+
+<section class="tab-pane hidden" id="tab-analise">
+  {% for triagem in triagens %}
+  <div class="card">
+    <h2 class="card-title">Triagem — {{ 'título/resumo' if triagem.stage == 'titulo_resumo' else 'texto completo' }}
+      <span class="badge badge-{{ 'ativo' if triagem.verdict == 'incluir' else 'arquivado' if triagem.verdict == 'excluir' else 'pausado' }}">{{ triagem.verdict }}</span>
+      {% if triagem.confidence is not none %}<span class="muted small">confidence {{ '%.2f' | format(triagem.confidence) }}</span>{% endif %}
+      {% if triagem.created_at %}<span class="muted small">· {{ triagem.created_at.strftime('%d/%m/%Y %H:%M') }}</span>{% endif %}
+      <form method="post" action="/projetos/{{ project.slug }}/publicacoes/{{ paper.id }}/analise/{{ triagem.analysis_id }}/excluir" class="inline" style="float:right" onsubmit="return confirm('Excluir este processo de triagem? O artigo volta a ficar elegível para reprocessamento.')">
+        <button class="btn btn-ghost btn-sm">Excluir triagem</button>
+      </form>
+    </h2>
+    {% if triagem.rule_notes %}<p class="muted small">Regras aplicadas: {{ triagem.rule_notes | join('; ') }}</p>{% endif %}
+    <table class="table">
+      <thead><tr><th>Critério</th><th>Atende?</th><th>Veredito</th><th>Justificativa</th><th>Evidência</th><th>Origem</th></tr></thead>
+      <tbody>
+        {% for e in triagem.evaluations %}
+        <tr>
+          <td><code>{{ e.code }}</code> <span class="muted small">{{ e.kind }}{% if e.required %}*{% endif %}</span></td>
+          <td>{% if e.met is sameas true %}sim{% elif e.met is sameas false %}não{% else %}—{% endif %}</td>
+          <td><span class="badge badge-{{ 'ativo' if e.verdict == 'incluir' else 'arquivado' if e.verdict == 'excluir' else 'pausado' }}">{{ e.verdict }}</span></td>
+          <td class="small">{{ e.justification or '—' }}</td>
+          <td class="small muted">{% if e.evidence %}“{{ e.evidence }}”{% else %}—{% endif %}</td>
+          <td>{{ e.origin }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <p class="muted small">* obrigatório · origem = quem registrou a decisão do critério (agente ou humano).</p>
+    <details class="triagem-edit" style="margin-top:10px">
+      <summary class="btn btn-ghost btn-sm" style="display:inline-block;cursor:pointer">✎ Editar triagem</summary>
+      <form method="post" action="/projetos/{{ project.slug }}/publicacoes/{{ paper.id }}/analise/{{ triagem.analysis_id }}/triagem" style="margin-top:10px">
+        <table class="table">
+          <thead><tr><th>Critério</th><th>Resultado</th><th>Justificativa</th><th>Evidência</th></tr></thead>
+          <tbody>
+            {% for e in triagem.evaluations %}
+            <tr>
+              <td><code>{{ e.code }}</code> <span class="muted small">{{ e.kind }}{% if e.required %}*{% endif %}</span></td>
+              <td>
+                <select name="res_{{ e.code }}">
+                  <option value="incluir"{% if e.verdict == 'incluir' %} selected{% endif %}>incluir</option>
+                  <option value="excluir"{% if e.verdict == 'excluir' %} selected{% endif %}>excluir</option>
+                  <option value="inconclusivo"{% if e.verdict == 'inconclusivo' %} selected{% endif %}>inconclusivo</option>
+                </select>
+              </td>
+              <td><input type="text" name="just_{{ e.code }}" value="{{ e.justification or '' }}" style="width:100%"></td>
+              <td><input type="text" name="evid_{{ e.code }}" value="{{ e.evidence or '' }}" style="width:100%"></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        <div class="form-inline" style="margin-top:8px">
+          <label>Veredito geral
+            <select name="verdict">
+              <option value="incluir"{% if triagem.verdict == 'incluir' %} selected{% endif %}>incluir</option>
+              <option value="excluir"{% if triagem.verdict == 'excluir' %} selected{% endif %}>excluir</option>
+              <option value="talvez"{% if triagem.verdict == 'talvez' %} selected{% endif %}>talvez</option>
+            </select>
+          </label>
+          <button class="btn btn-sm" type="submit">Salvar triagem</button>
+          <span class="muted small">Ao salvar, o estado do artigo e as decisões por critério são atualizados como registro humano.</span>
+        </div>
+      </form>
+    </details>
+  </div>
+  {% endfor %}
+  {% for d in deep %}
+  <div class="card">
+    <h2 class="card-title">Análise profunda
+      {% if d.confidence is not none %}<span class="muted small">confidence {{ '%.2f' | format(d.confidence) }}</span>{% endif %}
+      {% if d.created_at %}<span class="muted small">· {{ d.created_at.strftime('%d/%m/%Y %H:%M') }}</span>{% endif %}
+      <form method="post" action="/projetos/{{ project.slug }}/publicacoes/{{ paper.id }}/analise/{{ d.analysis_id }}/excluir" class="inline" style="float:right" onsubmit="return confirm('Excluir esta análise profunda? O artigo volta a ficar elegível para reprocessamento.')">
+        <button class="btn btn-ghost btn-sm">Excluir análise</button>
+      </form>
+    </h2>
+    {% if d.rule_notes %}<p class="muted small">Regras aplicadas: {{ d.rule_notes | join('; ') }}</p>{% endif %}
+    {% if d.summary %}<p>{{ d.summary }}</p>{% endif %}
+    {% if d.answers %}
+    <table class="table">
+      <thead><tr><th>Questão</th><th>Aborda?</th><th>Resposta</th><th>Evidência</th></tr></thead>
+      <tbody>
+        {% for ans in d.answers %}
+        <tr>
+          <td><code>{{ ans.code }}</code> <span class="muted small">{{ rq_questions.get(ans.code, '') }}</span></td>
+          <td>{% if ans.addressed is sameas true %}sim{% elif ans.addressed is sameas false %}não{% else %}—{% endif %}</td>
+          <td class="small">{{ ans.answer or '—' }}</td>
+          <td class="small muted">{% if ans.evidence %}“{{ ans.evidence }}”{% else %}—{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </div>
+  {% endfor %}
+  <div class="card">
+    <h2 class="card-title" style="display:flex;align-items:center;gap:10px">Análises do agente
+      <button type="button" class="btn btn-sm" id="btn-nova-analise">＋ Nova análise</button>
+      <button type="button" class="btn btn-sm btn-ghost" id="btn-triagem-manual">＋ Triagem manual</button>
+    </h2>
+    {% if analyses %}
+    {% set kind_labels = {'triagem': 'Triagem (título/resumo)', 'triagem_profunda': 'Triagem (texto completo)', 'profunda': 'Análise profunda', 'classificacao': 'Classificação', 'conceitos': 'Extração de conceitos', 'snowball': 'Snowballing'} %}
+    <table class="table">
+      <thead><tr><th>Tipo</th><th>Resultado</th><th>Data</th><th></th></tr></thead>
+      <tbody>
+        {% for a in analyses %}
+        {% set base_kind = a.kind[:-5] if a.kind.endswith('_erro') else a.kind %}
+        <tr>
+          <td>{{ kind_labels.get(base_kind, a.kind) }}{% if a.kind.endswith('_erro') %} <span class="badge badge-arquivado">erro</span>{% endif %}</td>
+          <td class="muted small">{{ a.result[:200] }}</td>
+          <td class="muted small">{{ a.created_at.strftime('%d/%m/%Y %H:%M') if a.created_at else '—' }}{% if a.model_name %} · Modelo: <code>{{ a.model_name }}</code>{% endif %}</td>
+          <td class="actions">
+            <form method="post" action="/projetos/{{ project.slug }}/publicacoes/{{ paper.id }}/analise/{{ a.id }}/excluir" class="inline" onsubmit="return confirm('Excluir esta análise?')">
+              <button class="btn btn-ghost btn-sm">Excluir</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="muted">Nenhuma análise registrada. A triagem por título/resumo e a análise profunda serão executadas pelo agente (Fases 4–6).</p>
+    {% endif %}
+  </div>
+</section>
+
+<section class="tab-pane hidden" id="tab-questoes">
+  {% set latest_deep = deep[-1] if deep else none %}
+  <div class="card">
+    <h2 class="card-title">Respostas às questões de pesquisa</h2>
+    {% if latest_deep and latest_deep.answers %}
+    <table class="table">
+      <thead><tr><th>Questão</th><th>Aborda?</th><th>Resposta</th><th>Evidência</th></tr></thead>
+      <tbody>
+        {% for ans in latest_deep.answers %}
+        <tr>
+          <td><code>{{ ans.code }}</code> <span class="muted small">{{ rq_questions.get(ans.code, '') }}</span></td>
+          <td>{% if ans.addressed is sameas true %}sim{% elif ans.addressed is sameas false %}não{% else %}—{% endif %}</td>
+          <td class="small">{{ ans.answer or '—' }}</td>
+          <td class="small muted">{% if ans.evidence %}“{{ ans.evidence }}”{% else %}—{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% if latest_deep.created_at %}<p class="muted small">Análise profunda de {{ latest_deep.created_at.strftime('%d/%m/%Y %H:%M') }}.</p>{% endif %}
+    {% else %}
+    <p class="muted">Nenhuma resposta registrada. A análise profunda (resumo + respostas às RQs) é executada pelo agente sobre o texto completo do PDF.</p>
+    {% endif %}
+  </div>
+</section>
+
+<section class="tab-pane hidden" id="tab-evidencias">
+  <div class="card">
+    <h2 class="card-title">Evidências</h2>
+    {% if evidences %}
+    <table class="table">
+      <thead><tr><th>Trecho</th><th>Página</th><th>Origem</th><th>Data</th><th></th></tr></thead>
+      <tbody>
+        {% for e in evidences %}
+        <tr>
+          <td class="small" style="max-width:480px">{{ e.excerpt }}</td>
+          <td>{{ e.page or '—' }}</td>
+          <td><span class="badge badge-{{ 'ativo' if (e.origin or 'agente') == 'agente' else 'novo' }}">{{ e.origin or 'agente' }}</span></td>
+          <td class="muted small">{{ e.created_at.strftime('%d/%m/%Y %H:%M') if e.created_at else '—' }}</td>
+          <td class="actions">
+            <a class="btn btn-ghost btn-sm" href="?evidencia={{ e.id }}#evidencias">Editar</a>
+            <form method="post" action="/projetos/{{ project.slug }}/publicacoes/{{ paper.id }}/evidencias/{{ e.id }}/excluir" class="inline" onsubmit="return confirm('Excluir esta evidência?')">
+              <button class="btn btn-ghost btn-sm">Excluir</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="muted">Nenhuma evidência registrada.</p>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h2 class="card-title">{% if edit_evidence %}Editar evidência #{{ edit_evidence.id }}{% else %}Adicionar evidência{% endif %}</h2>
+    {% if edit_evidence %}
+    <form method="post" action="/projetos/{{ project.slug }}/publicacoes/{{ paper.id }}/evidencias/{{ edit_evidence.id }}/editar" class="form-stack" style="max-width:560px">
+      <label>Trecho <textarea name="excerpt" rows="4" required>{{ edit_evidence.excerpt }}</textarea></label>
+      <label>Página <input type="number" name="page" min="1" value="{{ edit_evidence.page or '' }}"></label>
+      <div class="form-row">
+        <button class="btn btn-sm btn-primary" type="submit">Salvar alterações</button>
+        <a class="btn btn-ghost btn-sm" href="/projetos/{{ project.slug }}/publicacoes/{{ paper.id }}#evidencias">Cancelar</a>
+      </div>
+    </form>
+    {% else %}
+    <form method="post" action="/projetos/{{ project.slug }}/publicacoes/{{ paper.id }}/evidencias" class="form-stack" style="max-width:560px">
+      <label>Trecho <textarea name="excerpt" rows="4" required placeholder="Trecho literal do artigo que fundamenta a decisão"></textarea></label>
+      <label>Página <input type="number" name="page" min="1" placeholder="opcional"></label>
+      <div><button class="btn btn-sm" type="submit">Adicionar</button></div>
+    </form>
+    {% endif %}
+  </div>
+</section>
+
+<section class="tab-pane hidden" id="tab-classificacao">
+  <div class="card">
+    <h2 class="card-title">Tags</h2>
+    {% if tags %}
+    <p>{% for t in tags %}<span class="badge badge-ativo">{{ t.name }}</span> {% endfor %}</p>
+    {% else %}
+    <p class="muted">Nenhuma tag atribuída.</p>
+    {% endif %}
+    <p class="muted small">Campos de caracterização (classificação, conceitos, estratégias etc.) configurados em <a href="/projetos/{{ project.slug }}/configuracao#caracterizacao">Caracterização científica</a>.</p>
+  </div>
+  {% if catalog_fields %}
+  <div class="card">
+    <h2 class="card-title">Caracterização científica
+      {% if classif_meta %}
+      <span class="muted small" style="font-weight:400">
+        · origem: <span class="badge badge-{{ 'novo' if classif_meta.origin == 'manual' else 'ativo' }}">{{ classif_meta.origin }}</span>
+        {% if classif_meta.model %}· modelo: <code>{{ classif_meta.model }}</code>{% endif %}
+        · {% if classif_meta.edited_at %}editada em {{ classif_meta.edited_at[:16].replace('T', ' ') }}{% else %}em {{ (classif_meta.classified_at or classif_meta.created_at)[:16].replace('T', ' ') }}{% endif %}
+      </span>
+      {% endif %}
+    </h2>
+    <table class="table">
+      <thead><tr><th>Campo</th><th>Valor</th></tr></thead>
+      <tbody>
+        {% for f in catalog_fields %}
+        <tr>
+          <td>{{ f.label }}<div class="muted small">{{ f.identifier }} · {{ f.data_type }}</div></td>
+          <td>{{ classif_values.get(f.identifier) if classif_values.get(f.identifier) not in (none, '') else '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div class="actions-row" style="margin:12px 0 4px">
+      <button type="button" class="btn btn-sm btn-ghost" id="btn-edit-classif">✎ Editar classificação</button>
+    </div>
+    <div id="classif-form-wrap" hidden>
+    <form method="post" action="/projetos/{{ project.slug }}/publicacoes/{{ paper.id }}/classificacao" class="classif-form">
+      {% for f in catalog_fields %}
+      <div class="classif-field">
+        <div class="classif-field-head">
+          <strong>{{ f.label }}</strong>
+          <span class="muted small"><code>{{ f.identifier }}</code> · {{ f.data_type }}{% if f.required %} · obrigatório{% endif %}</span>
+        </div>
+        {% if f.llm_instruction %}<p class="muted small" style="margin:2px 0 6px">{{ f.llm_instruction }}</p>{% endif %}
+        <textarea name="v_{{ f.identifier }}" rows="3" placeholder="Valor de {{ f.label }}">{{ classif_values.get(f.identifier, '') }}</textarea>
+      </div>
+      {% endfor %}
+      <div class="actions-row" style="margin-top:10px">
+        <button class="btn btn-sm btn-primary" type="submit">Salvar classificação</button>
+        <button class="btn btn-sm btn-ghost" type="button" id="btn-cancel-classif">Cancelar</button>
+      </div>
+    </form>
+    <p class="muted small" style="margin-top:8px">Preenchimento manual — valores salvos ficam marcados como origem "manual" e aparecem na matriz de classificação.</p>
+    </div>
+  </div>
+  {% endif %}
+</section>
+
+<section class="tab-pane hidden" id="tab-conceitos">
+  <div class="card">
+    <h2 class="card-title">Conceitos deste artigo</h2>
+    <p class="muted small">Termos extraídos pelo agente (task “Extração de conceitos”) ou incluídos manualmente. O conceito é global ao projeto — edições aqui refletem na tela Conceitos e termos.</p>
+    {% if paper_concepts %}
+    <table class="table">
+      <thead><tr><th>Termo</th><th>Descrição</th><th>Termos relacionados</th><th>Origem</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+        {% for pc in paper_concepts %}
+        {% set c = pc.concept %}
+        <tr>
+          <td><strong>{{ c.term }}</strong></td>
+          <td class="muted small" style="max-width:320px">{{ c.description[:200] }}{% if c.description|length > 200 %}…{% endif %}</td>
+          <td class="muted small">{% if pc.related %}{{ pc.related | join(', ') }}{% else %}—{% endif %}</td>
+          <td><span class="badge badge-{{ 'novo' if pc.origin == 'manual' else 'ativo' }}">{{ pc.origin }}</span></td>
+          <td><span class="badge badge-{{ 'ativo' if c.status == 'aceito' else 'arquivado' if c.status == 'rejeitado' else 'pausado' }}">{{ c.status }}</span></td>
+          <td class="actions">
+            <a class="btn btn-ghost btn-sm" href="?conceito={{ c.id }}#conceitos">Editar</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="muted">Nenhum conceito vinculado a este artigo. Execute “Nova análise → Extração de conceitos” ou inclua um abaixo.</p>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h2 class="card-title">{% if edit_concept %}Editar conceito “{{ edit_concept.concept.term }}”{% else %}Incluir conceito{% endif %}</h2>
+    {% if edit_concept %}
+    <form method="post" action="/projetos/{{ project.slug }}/publicacoes/{{ paper.id }}/conceitos/{{ edit_concept.concept.id }}/editar" class="form-stack" style="max-width:560px">
+      <label>Termo <input type="text" name="term" required maxlength="300" value="{{ edit_concept.concept.term }}"></label>
+      <label>Descrição <textarea name="description" rows="3">{{ edit_concept.concept.description }}</textarea></label>
+      <label>Termos relacionados <input type="text" name="related_terms" value="{{ edit_concept.related | join(', ') }}" placeholder="sinônimos/variantes, separados por vírgula"></label>
+      <label>Status
+        <select name="status">
+          {% for st in ('proposto', 'aceito', 'rejeitado') %}<option value="{{ st }}" {% if edit_concept.concept.status == st %}selected{% endif %}>{{ st }}</option>{% endfor %}
+        </select>
+      </label>
+      <div class="form-row">
+        <button class="btn btn-sm btn-primary" type="submit">Salvar alterações</button>
+        <a class="btn btn-ghost btn-sm" href="/projetos/{{ project.slug }}/publicacoes/{{ paper.id }}#conceitos">Cancelar</a>
+      </div>
+    </form>
+    {% else %}
+    <form method="post" action="/projetos/{{ project.slug }}/publicacoes/{{ paper.id }}/conceitos" class="form-stack" style="max-width:560px">
+      <label>Termo <input type="text" name="term" required maxlength="300" placeholder="conceito, técnica ou métrica"></label>
+      <label>Descrição <textarea name="description" rows="3" placeholder="opcional — fiel ao artigo"></textarea></label>
+      <label>Termos relacionados <input type="text" name="related_terms" placeholder="sinônimos/variantes, separados por vírgula"></label>
+      <label>Status
+        <select name="status">
+          <option value="aceito" selected>aceito</option>
+          <option value="proposto">proposto</option>
+          <option value="rejeitado">rejeitado</option>
+        </select>
+      </label>
+      <div><button class="btn btn-sm" type="submit">Incluir conceito</button></div>
+    </form>
+    {% endif %}
+  </div>
+</section>
+
+<section class="tab-pane hidden" id="tab-qualidade">
+  <div class="card">
+    <h2 class="card-title">Avaliação da qualidade dos estudos</h2>
+    {% if quality_total is not none %}
+    <p><span class="badge badge-ativo">Nota de qualidade: {{ '%.2f' | format(quality_total) }}</span></p>
+    {% endif %}
+    {% if quality_criteria %}
+    <form method="post" action="/projetos/{{ project.slug }}/publicacoes/{{ paper.id }}/qualidade">
+      <table class="table">
+        <thead><tr><th>Critério</th><th>Descrição</th><th style="width:110px">Nota (0,0–1,0)</th><th>Comentário</th></tr></thead>
+        <tbody>
+          {% for c in quality_criteria %}
+          {% set sc = quality_scores.get(c.id) %}
+          <tr>
+            <td><code>{{ c.id and '' }}{{ c.code }}</code>{% if c.required %} <span class="muted small">*</span>{% endif %}</td>
+            <td>{{ c.description }}</td>
+            <td><input type="number" name="score_{{ c.id }}" min="0" max="1" step="0.05"
+                       value="{{ sc.score if sc else '' }}" placeholder="—" style="width:90px"></td>
+            <td><input type="text" name="comment_{{ c.id }}" value="{{ sc.comment if sc else '' }}" placeholder="opcional"></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <p class="muted small">* obrigatório. A nota de qualidade é a média ponderada dos critérios ativos.</p>
+      <button class="btn btn-sm" type="submit">Salvar avaliação</button>
+    </form>
+    {% else %}
+    <p class="muted">Nenhum critério de qualidade configurado. Cadastre em <a href="/projetos/{{ project.slug }}/configuracao#qualidade">Configuração → Avaliação da Qualidade</a>.</p>
+    {% endif %}
+  </div>
+</section>
+
+<section class="tab-pane hidden" id="tab-decisoes">
+  <div class="card">
+    <h2 class="card-title">Histórico de decisões</h2>
+    {% if decisions %}
+    <table class="table">
+      <thead><tr><th>Data</th><th>Critério</th><th>Veredito</th><th>Origem</th><th>Justificativa</th></tr></thead>
+      <tbody>
+        {% for d in decisions %}
+        <tr>
+          <td class="muted small">{{ d.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+          <td>{{ d.criterion_code or '—' }}</td>
+          <td><span class="badge badge-{{ 'ativo' if d.verdict == 'incluir' else 'arquivado' if d.verdict == 'excluir' else 'pausado' }}">{{ d.verdict }}</span></td>
+          <td>{{ d.origin }}</td>
+          <td class="muted small">{{ d.justification }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="muted">Nenhuma decisão do agente registrada ainda.</p>
+    {% endif %}
+  </div>
+</section>
+
+<section class="tab-pane hidden" id="tab-proveniencia">
+  <div class="card">
+    <h2 class="card-title">Proveniência</h2>
+    <p class="muted small">Consultas e fontes em que esta publicação apareceu.</p>
+    <table class="table">
+      <thead><tr><th>Consulta</th><th>Fonte</th><th>ID externo</th><th>Data</th></tr></thead>
+      <tbody>
+        {% for item in provenance %}
+        <tr>
+          <td>{% if item.seed_title %}<span class="muted small">snowball ← </span>{{ item.seed_title[:90] }}{{ '…' if item.seed_title|length > 90 }}{% elif item.query %}<code>#{{ item.query.id }}</code> {{ item.query.expression[:80] }}{% else %}—{% endif %}</td>
+          <td>{{ item.sighting.source }}</td>
+          <td class="muted small">{{ item.sighting.external_id }}</td>
+          <td class="muted small">{{ item.sighting.created_at.strftime('%d/%m/%Y %H:%M') if item.sighting.created_at else '—' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" class="empty">Sem registros de proveniência.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<dialog id="nova-analise" class="modal" style="width:min(560px,94vw)">
+  <div class="modal-head">
+    <h2>Nova análise — {{ paper.title[:70] }}{{ '…' if paper.title|length > 70 }}</h2>
+    <button type="button" class="btn btn-ghost btn-sm" id="na-close">✕</button>
+  </div>
+  <form method="post" action="/projetos/{{ project.slug }}/publicacoes/{{ paper.id }}/analise/nova">
+    <div class="form-grid">
+      <label class="span2">Tarefa
+        <select name="task_type" id="na-task">
+          {% for t in analysis_task_types %}<option value="{{ t.type }}">{{ t.name }}</option>{% endfor %}
+        </select>
+      </label>
+      <div class="span2">
+        <span class="muted small">Modelo</span>
+        <div class="model-picker" style="display:flex;gap:8px;align-items:center">
+          <input type="hidden" name="model_ref" class="llm-model-input" value="">
+          <span class="model-picker-label muted small" style="flex:1">— padrão do projeto —</span>
+          <button type="button" class="btn btn-sm" id="na-model-btn">Escolher…</button>
+          <button type="button" class="btn btn-ghost btn-sm" id="na-model-clear" title="Voltar ao padrão">Padrão</button>
+        </div>
+      </div>
+      <p class="muted small span2" id="na-hint"></p>
+      <div class="span2 actions-row">
+        <button class="btn" type="submit">Executar análise</button>
+      </div>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="triagem-manual" class="modal" style="width:min(860px,96vw)">
+  <div class="modal-head">
+    <h2>Triagem manual — {{ paper.title[:60] }}{{ '…' if paper.title|length > 60 }}</h2>
+    <button type="button" class="btn btn-ghost btn-sm" id="tm-close">✕</button>
+  </div>
+  <form method="post" action="/projetos/{{ project.slug }}/publicacoes/{{ paper.id }}/analise/triagem">
+    <div class="form-grid">
+      <label>Nível de triagem
+        <select name="stage" id="tm-stage">
+          <option value="titulo_resumo">1º nível — título/resumo</option>
+          <option value="texto_completo">2º nível — texto completo</option>
+        </select>
+      </label>
+      <label>Veredito geral
+        <select name="verdict">
+          <option value="incluir">incluir</option>
+          <option value="excluir">excluir</option>
+          <option value="talvez">talvez</option>
+        </select>
+      </label>
+    </div>
+    {% if screening_criteria %}
+    <p class="muted small">Avalie cada critério: <b>incluir</b> = o artigo atende ao critério (para exclusão, "não se aplica"); <b>excluir</b> = o critério elimina o artigo; <b>inconclusivo</b> = sem informação suficiente. Deixe tudo inconclusivo para registrar apenas o veredito geral.</p>
+    {% for scope, cid in (('titulo_resumo', 'tm-crit-titulo'), ('texto_completo', 'tm-crit-texto')) %}
+    <fieldset id="{{ cid }}" class="tm-crit-set" data-scope="{{ scope }}" style="border:1px solid var(--border);border-radius:6px;padding:8px 12px;margin:8px 0">
+      <legend class="muted small">{% if scope == 'titulo_resumo' %}Critérios de título/resumo{% else %}Texto completo — todos os critérios{% endif %}</legend>
+      <table class="table">
+        <thead><tr><th>Critério</th><th>Resultado</th><th>Justificativa</th><th>Evidência</th></tr></thead>
+        <tbody>
+          {% for c in screening_criteria if (scope == 'texto_completo') or (c.applies_to in ['titulo_resumo', 'ambos']) %}
+          <tr>
+            <td><code>{{ c.code }}</code> <span class="muted small">{{ 'IC' if c.type == 'inclusao' else 'EC' }}{% if c.required %}*{% endif %} — {{ c.description[:80] }}{{ '…' if c.description|length > 80 }}</span></td>
+            <td>
+              <select name="res_{{ c.code }}" disabled>
+                <option value="incluir">incluir</option>
+                <option value="excluir">excluir</option>
+                <option value="inconclusivo" selected>inconclusivo</option>
+              </select>
+            </td>
+            <td><input type="text" name="just_{{ c.code }}" disabled style="width:100%"></td>
+            <td><input type="text" name="evid_{{ c.code }}" disabled style="width:100%"></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </fieldset>
+    {% endfor %}
+    {% else %}
+    <p class="muted">Nenhum critério de inclusão/exclusão configurado. Configure-os em <a href="/projetos/{{ project.slug }}/configuracao">Configuração</a>.</p>
+    {% endif %}
+    <div class="actions-row" style="margin-top:10px">
+      <button class="btn" type="submit">Salvar triagem manual</button>
+      <span class="muted small">Registrada como decisão humana; alimenta a ficha e o quadro de fluxo do dashboard.</span>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="na-model-picker" class="modal" style="width:min(760px,94vw)">
+  <div class="modal-head">
+    <h2>Selecionar modelo</h2>
+    <button type="button" class="btn btn-ghost btn-sm" id="mp-close">✕</button>
+  </div>
+  <div class="form-inline" style="margin-bottom:8px">
+    <input type="text" id="mp-q" placeholder="Buscar por nome…" style="flex:2">
+    <select id="mp-provider">
+      <option value="">Todos os provedores</option>
+      {% for pid, pname in provider_names.items() %}<option value="{{ pid }}">{{ pname }}</option>{% endfor %}
+    </select>
+    <select id="mp-custo">
+      <option value="todos">Todos os custos</option>
+      <option value="gratis">Custo $0</option>
+    </select>
+    <label class="check"><input type="checkbox" id="mp-so-ativos" checked> só ativos</label>
+  </div>
+  <div id="mp-list" style="max-height:50vh;overflow-y:auto;border:1px solid var(--border);border-radius:6px"></div>
+  <p class="muted small" id="mp-count" style="margin:6px 0 0"></p>
+</dialog>
+
+<script>
+var NA_MODELOS = {{ model_options | tojson }};
+var NA_HINTS = {
+  'deep_analysis': 'Gera resumo e respostas às questões de pesquisa usando o texto completo do PDF.',
+  'classification': 'Preenche os campos de caracterização científica a partir do texto completo do PDF.',
+  'concept_extraction': 'Extrai conceitos/termos do artigo completo para a tela Conceitos e termos.',
+  'query_expansion': 'Sugere novas consultas de busca a partir dos termos deste artigo.',
+  'snowballing': 'Importa as referências deste artigo (via OpenAlex) como novas publicações.'
+};
+(function () {
+  var dlg = document.getElementById('nova-analise');
+  var taskSel = document.getElementById('na-task');
+  var hint = document.getElementById('na-hint');
+  function updHint() { hint.textContent = NA_HINTS[taskSel.value] || ''; }
+  taskSel.addEventListener('change', updHint); updHint();
+  document.getElementById('btn-nova-analise').addEventListener('click', function () {
+    dlg.showModal();
+  });
+  document.getElementById('na-close').addEventListener('click', function () { dlg.close(); });
+  dlg.addEventListener('click', function (e) { if (e.target === dlg) dlg.close(); });
+
+  // seletor de modelo (mesmo padrão do pipeline)
+  var mpDlg = document.getElementById('na-model-picker');
+  var mpTarget = null;
+  function openPicker() {
+    mpTarget = document.querySelector('#nova-analise .llm-model-input');
+    document.getElementById('mp-q').value = '';
+    renderPicker();
+    mpDlg.showModal();
+    setTimeout(function () { document.getElementById('mp-q').focus(); }, 50);
+  }
+  document.getElementById('na-model-btn').addEventListener('click', openPicker);
+  document.getElementById('na-model-clear').addEventListener('click', function () {
+    mpTarget.value = '';
+    document.querySelector('#nova-analise .model-picker-label').textContent = '— padrão do projeto —';
+  });
+  document.getElementById('mp-close').addEventListener('click', function () { mpDlg.close(); });
+  mpDlg.addEventListener('click', function (e) { if (e.target === mpDlg) mpDlg.close(); });
+  function renderPicker() {
+    var q = document.getElementById('mp-q').value.toLowerCase();
+    var prov = document.getElementById('mp-provider').value;
+    var custo = document.getElementById('mp-custo').value;
+    var list = document.getElementById('mp-list');
+    var n = 0, html = '';
+    for (var i = 0; i < NA_MODELOS.length; i++) {
+      var m = NA_MODELOS[i];
+      if (q && m.identifier.toLowerCase().indexOf(q) < 0 &&
+          m.provider.toLowerCase().indexOf(q) < 0) continue;
+      if (prov && String(m.provider_id) !== prov) continue;
+      if (custo === 'gratis' && (m.cost_in || m.cost_out)) continue;
+      n++;
+      var sel = mpTarget && mpTarget.value === m.ref;
+      html += '<div class="mp-item" data-ref="' + m.ref + '" style="padding:6px 10px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:baseline;' + (sel ? 'background:var(--accent-bg,#eef2ff)' : '') + '">'
+        + '<code>' + m.identifier + '</code>'
+        + (m.is_default ? '<span title="padrão do projeto">★</span>' : '')
+        + '<span class="muted small mp-prov" style="flex:1">' + m.provider + '</span>'
+        + '<span class="muted small">' + (m.cost_in || m.cost_out ? ('$' + m.cost_in + '/$' + m.cost_out) : 'grátis') + '</span>'
+        + '</div>';
+    }
+    list.innerHTML = html || '<p class="muted small" style="padding:10px">Nenhum modelo encontrado.</p>';
+    document.getElementById('mp-count').textContent = n + ' modelo(s)';
+    Array.prototype.forEach.call(list.querySelectorAll('.mp-item'), function (el) {
+      el.onclick = function () {
+        mpTarget.value = el.dataset.ref;
+        document.querySelector('#nova-analise .model-picker-label').textContent =
+          el.querySelector('code').textContent + ' (' +
+          el.querySelector('.mp-prov').textContent.trim() + ')';
+        mpDlg.close();
+      };
+    });
+  }
+  ['mp-q', 'mp-provider', 'mp-custo'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', renderPicker);
+    document.getElementById(id).addEventListener('change', renderPicker);
+  });
+})();
+</script>
+
+<script>
+(function () {
+  var dlg = document.getElementById('triagem-manual');
+  if (!dlg) return;
+  var stageSel = document.getElementById('tm-stage');
+  function syncScopes() {
+    var scope = stageSel.value; // titulo_resumo | texto_completo
+    document.querySelectorAll('.tm-crit-set').forEach(function (fs) {
+      var active = fs.dataset.scope === scope;
+      fs.style.opacity = active ? '1' : '.45';
+      fs.querySelectorAll('input, select').forEach(function (el) {
+        el.disabled = !active;
+      });
+    });
+  }
+  stageSel.addEventListener('change', syncScopes); syncScopes();
+  document.getElementById('btn-triagem-manual').addEventListener('click', function () {
+    dlg.showModal();
+  });
+  document.getElementById('tm-close').addEventListener('click', function () { dlg.close(); });
+  dlg.addEventListener('click', function (e) { if (e.target === dlg) dlg.close(); });
+})();
+</script>
+
+<script>
+(function () {
+  var tabs = document.querySelectorAll('.tab');
+  function show(id) {
+    document.querySelectorAll('.tab-pane').forEach(function (p) { p.classList.add('hidden'); });
+    var pane = document.getElementById('tab-' + id);
+    if (pane) pane.classList.remove('hidden');
+    tabs.forEach(function (t) { t.classList.toggle('active', t.dataset.tab === id); });
+  }
+  tabs.forEach(function (t) { t.addEventListener('click', function () { show(t.dataset.tab); }); });
+  var anchor = location.hash.replace('#', '');
+  var map = { analise: 'analise', questoes: 'questoes', evidencias: 'evidencias', classificacao: 'classificacao', conceitos: 'conceitos', decisoes: 'decisoes', proveniencia: 'proveniencia' };
+  if (map[anchor]) show(anchor);
+  var editBtn = document.getElementById('btn-edit-classif');
+  var cancelBtn = document.getElementById('btn-cancel-classif');
+  var formWrap = document.getElementById('classif-form-wrap');
+  if (editBtn && formWrap) {
+    function setClassifForm(open) {
+      formWrap.hidden = !open;
+      editBtn.textContent = open ? '✎ Ocultar formulário' : '✎ Editar classificação';
+    }
+    editBtn.addEventListener('click', function () { setClassifForm(formWrap.hidden); });
+    if (cancelBtn) cancelBtn.addEventListener('click', function () { setClassifForm(false); });
+  }
+})();
+</script>
+{% endblock %}

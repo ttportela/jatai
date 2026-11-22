@@ -1,0 +1,490 @@
+{% extends "base.html" %}
+{% block topbar %}{{ project.name }} — Dashboard{% endblock %}
+{% block content %}
+<div class="slr-dash">
+  <!-- Cabeçalho -->
+  <header class="slr-header">
+    <div class="slr-header-left">
+      <a class="slr-back-link" href="/projetos/{{ project.slug }}">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+        Voltar ao projeto
+      </a>
+      <div class="slr-title-row">
+        <h1 class="slr-title">{{ project.name }}</h1>
+      </div>
+    </div>
+
+    <div class="slr-header-pills">
+      <span class="slr-meta-pill">
+        <span class="slr-dot {% if stats.runs_active > 0 %}active{% endif %}"></span>
+        {{ stats.runs_active }} execução(ões) ativa(s)
+      </span>
+      <span class="slr-meta-pill">
+        Agendamento: {{ schedule.frequency if schedule and schedule.enabled else 'Manual' }}
+      </span>
+    </div>
+  </header>
+
+  <!-- Bloco 1: Métricas do Corpus & Triagem -->
+  <section class="slr-kpi-section" aria-label="Métricas do Corpus">
+    <h2 class="slr-section-kicker">Corpus &amp; Estado da Triagem</h2>
+    <div class="slr-kpi-grid">
+      <a class="slr-kpi slr-kpi--primary" href="/projetos/{{ project.slug }}/publicacoes">
+        <div class="slr-kpi-top">
+          <span class="slr-kpi-label">Publicações</span>
+          <span class="slr-kpi-icon" aria-hidden="true">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>
+          </span>
+        </div>
+        <span class="slr-kpi-num">{{ stats.papers_total }}</span>
+        <span class="slr-kpi-sub">Total indexado</span>
+      </a>
+
+      <a class="slr-kpi slr-kpi--success" href="/projetos/{{ project.slug }}/publicacoes?estado=incluido">
+        <div class="slr-kpi-top">
+          <span class="slr-kpi-label">Incluídos</span>
+          <span class="slr-kpi-icon" aria-hidden="true">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="20 6 9 17 4 12"/></svg>
+          </span>
+        </div>
+        <span class="slr-kpi-num">{{ stats.states.get('incluido', 0) }}</span>
+        <span class="slr-kpi-sub">
+          {% if stats.papers_total %}{{ ((stats.states.get('incluido', 0) / stats.papers_total) * 100) | round(1) }}% do corpus{% else %}0% do corpus{% endif %}
+        </span>
+      </a>
+
+      <a class="slr-kpi slr-kpi--danger" href="/projetos/{{ project.slug }}/publicacoes?estado=excluido">
+        <div class="slr-kpi-top">
+          <span class="slr-kpi-label">Excluídos</span>
+          <span class="slr-kpi-icon" aria-hidden="true">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </span>
+        </div>
+        <span class="slr-kpi-num">{{ stats.states.get('excluido', 0) }}</span>
+        <span class="slr-kpi-sub">
+          {% if stats.papers_total %}{{ ((stats.states.get('excluido', 0) / stats.papers_total) * 100) | round(1) }}% do corpus{% else %}0% do corpus{% endif %}
+        </span>
+      </a>
+
+      <a class="slr-kpi slr-kpi--warning" href="/projetos/{{ project.slug }}/publicacoes?estado=novo">
+        <div class="slr-kpi-top">
+          <span class="slr-kpi-label">Pendentes</span>
+          <span class="slr-kpi-icon" aria-hidden="true">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </span>
+        </div>
+        <span class="slr-kpi-num">{{ stats.states.get('novo', 0) }}</span>
+        <span class="slr-kpi-sub">Aguardando triagem</span>
+      </a>
+
+      <a class="slr-kpi slr-kpi--primary" href="/projetos/{{ project.slug }}/publicacoes?pdf=sim">
+        <div class="slr-kpi-top">
+          <span class="slr-kpi-label">Com PDF</span>
+          <span class="slr-kpi-icon" aria-hidden="true">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          </span>
+        </div>
+        <span class="slr-kpi-num">{{ stats.with_pdf }}</span>
+        <span class="slr-kpi-sub">Texto completo</span>
+      </a>
+
+      <a class="slr-kpi slr-kpi--success" href="/projetos/{{ project.slug }}/publicacoes?estado=incluido">
+        <div class="slr-kpi-top">
+          <span class="slr-kpi-label">Analisados</span>
+          <span class="slr-kpi-icon" aria-hidden="true">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          </span>
+        </div>
+        <span class="slr-kpi-num">{{ stats.states.get('incluido', 0) }}</span>
+        <span class="slr-kpi-sub">Extração concluída</span>
+      </a>
+    </div>
+
+    {% if stats.papers_total > 0 %}
+    {% set pct_inc = (stats.states.get('incluido', 0) / stats.papers_total * 100) | round(1) %}
+    {% set pct_exc = (stats.states.get('excluido', 0) / stats.papers_total * 100) | round(1) %}
+    {% set pct_nov = (stats.states.get('novo', 0) / stats.papers_total * 100) | round(1) %}
+    <div class="slr-funnel-bar">
+      <div class="slr-funnel-meta">
+        <span><strong>Progresso da triagem:</strong> {{ (pct_inc + pct_exc) | round(1) }}% avaliado</span>
+        <div class="slr-funnel-legend">
+          <span class="slr-legend-item"><span class="slr-legend-swatch" style="background: var(--d-success);"></span>Incluídos ({{ pct_inc }}%)</span>
+          <span class="slr-legend-item"><span class="slr-legend-swatch" style="background: var(--d-danger);"></span>Excluídos ({{ pct_exc }}%)</span>
+          <span class="slr-legend-item"><span class="slr-legend-swatch" style="background: var(--d-warning);"></span>Pendentes ({{ pct_nov }}%)</span>
+        </div>
+      </div>
+      <div class="slr-progress-track" role="img" aria-label="Distribuição da triagem">
+        <div class="slr-progress-seg" style="width: {{ pct_inc }}%; background: var(--d-success);"></div>
+        <div class="slr-progress-seg" style="width: {{ pct_exc }}%; background: var(--d-danger);"></div>
+        <div class="slr-progress-seg" style="width: {{ pct_nov }}%; background: var(--d-warning);"></div>
+      </div>
+    </div>
+    {% endif %}
+  </section>
+
+  <!-- Bloco 2: Pesquisa & Telemetria do Agente / LLM -->
+  <section class="slr-kpi-section" aria-label="Pesquisa e Telemetria LLM">
+    <h2 class="slr-section-kicker">Descoberta &amp; Telemetria LLM</h2>
+    <div class="slr-kpi-grid">
+      <a class="slr-kpi slr-kpi--purple" href="/projetos/{{ project.slug }}/conceitos">
+        <div class="slr-kpi-top">
+          <span class="slr-kpi-label">Conceitos</span>
+          <span class="slr-kpi-icon" aria-hidden="true">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+          </span>
+        </div>
+        <span class="slr-kpi-num">{{ stats.concepts }}</span>
+        <span class="slr-kpi-sub">Termos mapeados</span>
+      </a>
+
+      <a class="slr-kpi" href="/projetos/{{ project.slug }}/consultas">
+        <div class="slr-kpi-top">
+          <span class="slr-kpi-label">Consultas</span>
+          <span class="slr-kpi-icon" aria-hidden="true">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          </span>
+        </div>
+        <span class="slr-kpi-num">{{ stats.queries_total }}</span>
+        <span class="slr-kpi-sub">Strings de busca</span>
+      </a>
+
+      <a class="slr-kpi" href="/projetos/{{ project.slug }}/agente/execucoes">
+        <div class="slr-kpi-top">
+          <span class="slr-kpi-label">Iterações</span>
+          <span class="slr-kpi-icon" aria-hidden="true">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+          </span>
+        </div>
+        <span class="slr-kpi-num">{{ stats.iterations_total }}</span>
+        <span class="slr-kpi-sub">{{ stats.runs_total }} execução(ões)</span>
+      </a>
+
+      <a class="slr-kpi" href="/projetos/{{ project.slug }}/agente/modelos">
+        <div class="slr-kpi-top">
+          <span class="slr-kpi-label">Chamadas LLM</span>
+          <span class="slr-kpi-icon" aria-hidden="true">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/></svg>
+          </span>
+        </div>
+        <span class="slr-kpi-num">{{ stats.llm_calls }}</span>
+        <span class="slr-kpi-sub">Requisições API</span>
+      </a>
+
+      <div class="slr-kpi">
+        <div class="slr-kpi-top">
+          <span class="slr-kpi-label">Custo LLM</span>
+          <span class="slr-kpi-icon" aria-hidden="true">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+          </span>
+        </div>
+        <span class="slr-kpi-num">${{ '%.4f' | format(stats.llm_cost) }}</span>
+        <span class="slr-kpi-sub">USD acumulado</span>
+      </div>
+
+      <div class="slr-kpi">
+        <div class="slr-kpi-top">
+          <span class="slr-kpi-label">Tokens</span>
+          <span class="slr-kpi-icon" aria-hidden="true">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
+          </span>
+        </div>
+        <span class="slr-kpi-num">{{ usage.tokens_in + usage.tokens_out }}</span>
+        <span class="slr-kpi-sub">{{ usage.tokens_in }} in / {{ usage.tokens_out }} out</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Tabela PRISMA -->
+  <section class="slr-card">
+    <div class="slr-card-header">
+      <h2 class="slr-card-title">Detalhamento quantitativo dos artigos por fonte e fase</h2>
+      {% if flow.levels or flow.rows %}
+      <span class="slr-card-badge">{{ flow.included_total }} / {{ flow.papers_total }} únicos incluídos</span>
+      {% endif %}
+    </div>
+
+    {% if flow.levels or flow.rows %}
+    <div class="slr-table-wrap">
+      <table class="slr-table slr-prisma">
+        <thead>
+          <tr>
+            <th rowspan="2">Fontes</th>
+            <th rowspan="2" class="slr-num">Total</th>
+            <th rowspan="2" class="slr-num" title="Artigos desta fonte que já haviam sido encontrados em outra fonte (proveniência anterior)">Duplicados</th>
+            <th rowspan="2" class="slr-num" title="Artigos ainda sem decisão de triagem (nem incluído nem excluído)">Em triagem</th>
+            {% for lv in flow.levels %}
+            <th colspan="{{ lv.cols | length }}" class="slr-phase-group">{{ lv.label }}</th>
+            {% endfor %}
+            <th rowspan="2" class="slr-num slr-col-included">Artigos incluídos</th>
+          </tr>
+          <tr>
+            {% for lv in flow.levels %}
+              {% for c in lv.cols %}
+              <th class="slr-num"{% if c.hint %} title="{{ c.hint }}"{% endif %}>{{ c.label }}</th>
+              {% endfor %}
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in flow.rows %}
+          <tr>
+            <td>{{ row.label }}</td>
+            <td class="slr-num">{{ row.total }}</td>
+            <td class="slr-num">{{ row.duplicates }}</td>
+            <td class="slr-num">{{ row.pending }}</td>
+            {% for lv in flow.levels %}
+              {% for c in lv.cols %}
+              <td class="slr-num">{{ row.cells.get(lv.key ~ '|' ~ c.key, '·') }}</td>
+              {% endfor %}
+            {% endfor %}
+            <td class="slr-num slr-col-included">{{ row.included }}</td>
+          </tr>
+          {% endfor %}
+          <tr class="slr-total-row">
+            <td>Total</td>
+            <td class="slr-num">{{ flow.total_row.total }}</td>
+            <td class="slr-num">{{ flow.total_row.duplicates }}</td>
+            <td class="slr-num">{{ flow.total_row.pending }}</td>
+            {% for lv in flow.levels %}
+              {% for c in lv.cols %}
+              <td class="slr-num">{{ flow.total_row.cells.get(lv.key ~ '|' ~ c.key, 0) }}</td>
+              {% endfor %}
+            {% endfor %}
+            <td class="slr-num slr-col-included">{{ flow.total_row.included }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="slr-footnote">
+      “Total” = artigos originados de cada fonte bibliográfica (um artigo encontrado em várias fontes conta em cada uma). “Duplicados” = artigos desta fonte que já haviam sido encontrados em outra fonte — cada artigo é contado apenas na primeira fonte da sua ordem de proveniência. “Em triagem” e “Artigos incluídos" = artigos únicos contabilizados apenas na primeira fonte da proveniência (não incluem duplicados). Em cada nível de triagem, as colunas mostram quantos artigos daquela fonte foram removidos por cada critério de inclusão/exclusão. O último nível corresponde aos artigos incluídos. <strong>{{ flow.papers_total }}</strong> artigo(s) único(s) no total; <strong>{{ flow.included_total }}</strong> incluído(s).
+    </p>
+    {% else %}
+    <p class="slr-empty">Nenhum dado de busca ou triagem disponível até o momento.</p>
+    {% endif %}
+  </section>
+
+  <!-- Distribuição por Ano e por Fonte -->
+  <div class="slr-grid-2">
+    <section class="slr-card">
+      <div class="slr-card-header">
+        <h2 class="slr-card-title">Publicações por ano</h2>
+        <span class="slr-card-badge">{{ by_year | length }} ano(s)</span>
+      </div>
+      {% if by_year %}
+      {% set maxy = by_year | map(attribute=1) | max %}
+      {% set maxy = maxy if maxy > 0 else 1 %}
+      <div class="slr-bars">
+        {% for y, n in by_year %}
+        <div class="slr-bar-row">
+          <span class="slr-bar-label" title="{{ y }}">{{ y }}</span>
+          <div class="slr-bar-track">
+            <div class="slr-bar-fill" style="width: {{ (n / maxy * 100) | round(0) }}%"></div>
+          </div>
+          <span class="slr-bar-val">
+            {{ n }}
+            {% if stats.papers_total %}<span class="slr-bar-pct">({{ ((n / stats.papers_total) * 100) | round(0) | int }}%)</span>{% endif %}
+          </span>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="slr-empty">Sem dados anuais registados.</p>
+      {% endif %}
+    </section>
+
+    <section class="slr-card">
+      <div class="slr-card-header">
+        <h2 class="slr-card-title">Publicações por fonte</h2>
+        <span class="slr-card-badge">{{ by_source | length }} fonte(s)</span>
+      </div>
+      {% if by_source %}
+      {% set maxs = by_source | map(attribute=1) | max %}
+      {% set maxs = maxs if maxs > 0 else 1 %}
+      <div class="slr-bars">
+        {% for src, n in by_source %}
+        <div class="slr-bar-row">
+          <span class="slr-bar-label" title="{{ src }}">{{ src }}</span>
+          <div class="slr-bar-track">
+            <div class="slr-bar-fill slr-bar-fill--teal" style="width: {{ (n / maxs * 100) | round(0) }}%"></div>
+          </div>
+          <span class="slr-bar-val">
+            {{ n }}
+            {% if stats.papers_total %}<span class="slr-bar-pct">({{ ((n / stats.papers_total) * 100) | round(0) | int }}%)</span>{% endif %}
+          </span>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="slr-empty">Sem dados de fontes registados.</p>
+      {% endif %}
+    </section>
+  </div>
+
+  <!-- Evolução por Iteração & Estado de Execução -->
+  <div class="slr-grid-2">
+    <section class="slr-card">
+      <div class="slr-card-header">
+        <h2 class="slr-card-title">Evolução por iteração</h2>
+        <form method="get" action="/projetos/{{ project.slug }}/dashboard" class="inline">
+          <select name="periodo" onchange="this.form.submit()">
+            <option value="dia"{% if periodo == 'dia' %} selected{% endif %}>Últimas 24h</option>
+            <option value="semana"{% if periodo == 'semana' %} selected{% endif %}>Últimos 7 dias</option>
+            <option value="mes"{% if periodo == 'mes' %} selected{% endif %}>Últimos 30 dias</option>
+          </select>
+        </form>
+        <span class="slr-card-badge">{{ iterations | length }} registo(s)</span>
+      </div>
+      <div class="slr-table-wrap">
+        <table class="slr-table">
+          <thead>
+            <tr>
+              <th>Run</th>
+              <th>Iter.</th>
+              <th>Data</th>
+              <th class="slr-num">Artigos novos</th>
+              <th class="slr-num">Termos</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for it in iterations %}
+            <tr>
+              <td><span class="slr-diff-code">#{{ it.run_id }}</span></td>
+              <td><strong>{{ it.number }}</strong></td>
+              <td class="muted small">{{ it.created_at.strftime('%d/%m %H:%M') if it.created_at else '—' }}</td>
+              <td class="slr-num">+{{ it.new_papers }}</td>
+              <td class="slr-num">+{{ it.new_terms }}</td>
+              <td><span class="slr-badge slr-badge--{{ it.status | lower }}">{{ it.status }}</span></td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="6" style="text-align: center; color: var(--d-muted); padding: 1.25rem;">Nenhuma iteração no período.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="slr-card">
+      <div class="slr-card-header">
+        <h2 class="slr-card-title">Execução &amp; Agendamento</h2>
+        <span class="slr-badge {% if stats.runs_active > 0 %}slr-badge--incluido{% endif %}">
+          {{ 'Ativo' if stats.runs_active > 0 else 'Em espera' }}
+        </span>
+      </div>
+
+      <div class="slr-kv-grid">
+        <div class="slr-kv-item">
+          <span class="slr-kv-key">Execuções totais</span>
+          <span class="slr-kv-val">{{ stats.runs_total }} ({{ stats.runs_active }} ativas)</span>
+        </div>
+        <div class="slr-kv-item">
+          <span class="slr-kv-key">Agendamento</span>
+          <span class="slr-kv-val">{{ schedule.frequency if schedule and schedule.enabled else 'Manual' }}</span>
+        </div>
+        <div class="slr-kv-item">
+          <span class="slr-kv-key">Próxima execução</span>
+          <span class="slr-kv-val">{{ next_run or '—' }}</span>
+        </div>
+        <div class="slr-kv-item">
+          <span class="slr-kv-key">Iterações com falha</span>
+          <span class="slr-kv-val" style="{% if failed_iters %}color: var(--d-danger);{% endif %}">{{ failed_iters | length }}</span>
+        </div>
+      </div>
+
+      {% if failed_iters %}
+      <div class="slr-alert" role="alert">
+        <span>Atenção: {{ failed_iters | length }} iteração(ões) terminaram com falha.</span>
+        <a href="/projetos/{{ project.slug }}/agente/execucoes">Ver execuções →</a>
+      </div>
+      {% endif %}
+    </section>
+  </div>
+
+  <!-- Últimos Artigos & Intervenções Humanas -->
+  <div class="slr-grid-2">
+    <section class="slr-card">
+      <div class="slr-card-header">
+        <h2 class="slr-card-title">Últimos artigos</h2>
+        <a class="slr-back-link" href="/projetos/{{ project.slug }}/publicacoes">Ver todos →</a>
+      </div>
+      {% if latest %}
+      <ul class="slr-list">
+        {% for p in latest %}
+        <li class="slr-list-item">
+          <a class="slr-paper-link" href="/projetos/{{ project.slug }}/publicacoes/{{ p.id }}">
+            {{ p.title[:80] }}{% if p.title | length > 80 %}…{% endif %}
+          </a>
+          <div class="slr-paper-meta">
+            <span class="slr-card-badge">{{ p.year or '?' }}</span>
+            <span class="slr-badge slr-badge--{{ p.state | lower }}">{{ p.state }}</span>
+          </div>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="slr-empty">Nenhum artigo recente.</p>
+      {% endif %}
+    </section>
+
+    <section class="slr-card">
+      <div class="slr-card-header">
+        <h2 class="slr-card-title">Intervenções humanas</h2>
+        <span class="slr-card-badge">{{ interventions | length }}</span>
+      </div>
+      {% if interventions %}
+      <ul class="slr-list">
+        {% for i in interventions %}
+        <li class="slr-list-item" style="flex-direction: column; gap: 0.3rem;">
+          <div style="display: flex; justify-content: space-between; width: 100%; align-items: center;">
+            <strong>{{ i.entity }}.{{ i.field }}</strong>
+            <span style="font-size: 0.74rem; color: var(--d-muted); font-variant-numeric: tabular-nums;">
+              {{ i.created_at.strftime('%d/%m %H:%M') if i.created_at else '' }}
+            </span>
+          </div>
+          <div>
+            <span class="slr-diff-code">{{ i.old_value }}</span>
+            <span style="color: var(--d-muted); margin: 0 0.25rem;">→</span>
+            <span class="slr-diff-code" style="color: var(--d-primary); font-weight: 600;">{{ i.new_value }}</span>
+          </div>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="slr-empty">Nenhuma intervenção registada.</p>
+      {% endif %}
+    </section>
+  </div>
+
+  <!-- Conceitos por Iteração -->
+  <section class="slr-card">
+    <div class="slr-card-header">
+      <h2 class="slr-card-title">Conceitos por iteração</h2>
+      {% if concepts_by_iter %}
+      <span class="slr-card-badge">{{ concepts_by_iter | length }} iteração(ões)</span>
+      {% endif %}
+    </div>
+
+    {% if concepts_by_iter %}
+    {% set maxc = concepts_by_iter | map(attribute=1) | max %}
+    {% set maxc = maxc if maxc > 0 else 1 %}
+    <div class="slr-concept-chips">
+      {% for it, n in concepts_by_iter %}
+      <div class="slr-concept-chip">
+        <div class="slr-concept-chip-top">
+          <span class="slr-concept-chip-iter">Iteração {{ it }}</span>
+          <span class="slr-concept-chip-count">{{ n }} conceito(s)</span>
+        </div>
+        <div class="slr-bar-track" style="height: 6px;">
+          <div class="slr-bar-fill" style="width: {{ (n / maxc * 100) | round(0) }}%; background: var(--d-purple);"></div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="slr-empty">Nenhum conceito extraído ainda.</p>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

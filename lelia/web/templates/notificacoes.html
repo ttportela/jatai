@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Notificações — {{ project.name }}{% endblock %}
+{% block topbar %}Notificações{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>Notificações</h1>
+  <p class="muted"><a href="/projetos/{{ project.slug }}">← voltar ao projeto</a> · alertas e eventos do agente</p>
+</div>
+
+<div class="card">
+  <div class="live-head" style="margin-bottom:8px">
+    <h2 class="card-title" style="margin:0">{{ notifications | length }} notificação(ões)</h2>
+    {% if notifications %}
+    <form method="post" action="/projetos/{{ project.slug }}/notificacoes/ler-todas">
+      <button class="btn btn-ghost btn-sm">Marcar todas como lidas</button>
+    </form>
+    {% endif %}
+  </div>
+  {% if notifications %}
+    {% for n in notifications %}
+    {% set kind = n.kind or 'info' %}
+    <div class="notif-item {{ 'unread' if not n.read }}">
+      <span class="notif-ico notif-ico-{{ kind }}" title="{{ kind }}">
+        {% if kind == 'pdf_dup' %}⚠️{% elif kind == 'run' %}🤖{% elif kind == 'pdf_browser' %}📄{% elif kind == 'browser' %}🌐{% else %}🔔{% endif %}
+      </span>
+      <div class="notif-body">
+        <div class="notif-head">
+          {% if n.link %}<a class="notif-title" href="{{ n.link }}">{{ n.title }}</a>
+          {% else %}<span class="notif-title">{{ n.title }}</span>{% endif %}
+          <span class="notif-kind">{{ kind.replace('_', ' ') }}</span>
+          {% if not n.read %}<span class="notif-dot" title="Não lida"></span>{% endif %}
+        </div>
+        {% if n.body %}<div class="notif-text">{{ n.body }}</div>{% endif %}
+        <div class="notif-foot">
+          <span class="notif-time">{{ n.created_at.strftime('%d/%m/%Y %H:%M') if n.created_at else '' }}</span>
+          {% if not n.read %}
+          <form method="post" action="/projetos/{{ project.slug }}/notificacoes/{{ n.id }}/ler" class="inline">
+            <button class="btn btn-ghost btn-sm">Marcar como lida</button>
+          </form>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  {% else %}
+    <p class="muted">Nenhuma notificação ainda. Execuções do agente e alertas de duplicatas aparecerão aqui.</p>
+  {% endif %}
+</div>
+{% endblock %}

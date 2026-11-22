@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block topbar %}{{ project.name }} — Conceitos{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>Conceitos e termos</h1>
+  <p class="muted"><a href="/projetos/{{ project.slug }}">← voltar ao projeto</a> · extraídos pelo agente durante a análise</p>
+</div>
+
+<div class="linha-titulo">
+  <p>
+    <a class="btn btn-sm {{ 'btn-primary' if not status else 'btn-ghost' }}" href="?">Todos ({{ counts[''] }})</a>
+    <a class="btn btn-sm {{ 'btn-primary' if status == 'proposto' else 'btn-ghost' }}" href="?status=proposto">Propostos ({{ counts['proposto'] }})</a>
+    <a class="btn btn-sm {{ 'btn-primary' if status == 'aceito' else 'btn-ghost' }}" href="?status=aceito">Aceitos ({{ counts['aceito'] }})</a>
+    <a class="btn btn-sm {{ 'btn-primary' if status == 'rejeitado' else 'btn-ghost' }}" href="?status=rejeitado">Rejeitados ({{ counts['rejeitado'] }})</a>
+  </p>
+  <a class="btn" href="/projetos/{{ project.slug }}/conceitos/novo">＋ Novo conceito</a>
+</div>
+
+<div class="card">
+  <table class="table">
+    <thead><tr><th>Termo</th><th>Descrição</th><th>Origem</th><th>Iteração</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+      {% for c in concepts %}
+      <tr>
+        <td><strong>{{ c.term }}</strong></td>
+        <td class="muted small">{{ c.description[:160] }}{% if c.description|length > 160 %}…{% endif %}</td>
+        <td class="muted small">{{ c.origin }}</td>
+        <td class="muted small">#{{ c.iteration }}</td>
+        <td><span class="badge badge-{{ 'ativo' if c.status == 'aceito' else 'arquivado' if c.status == 'rejeitado' else 'pausado' }}">{{ c.status }}</span></td>
+        <td class="actions" style="white-space:nowrap">
+          <a class="btn btn-ghost btn-sm" href="/projetos/{{ project.slug }}/conceitos/{{ c.id }}/editar" title="Editar conceito">✎</a>
+          {% if c.status != 'aceito' %}
+          <form method="post" action="/projetos/{{ project.slug }}/conceitos/{{ c.id }}/status" class="inline"><input type="hidden" name="status" value="aceito"><button class="btn btn-ghost btn-sm btn-ok" style="color:var(--success)" title="Aceitar conceito">✓</button></form>
+          {% endif %}
+          {% if c.status != 'rejeitado' %}
+          <form method="post" action="/projetos/{{ project.slug }}/conceitos/{{ c.id }}/status" class="inline"><input type="hidden" name="status" value="rejeitado"><button class="btn btn-ghost btn-sm" style="color:var(--danger)" title="Rejeitar conceito">✕</button></form>
+          {% endif %}
+          <form method="post" action="/projetos/{{ project.slug }}/conceitos/{{ c.id }}/excluir" class="inline"
+                onsubmit="return confirm('Excluir o conceito &quot;{{ c.term }}&quot;? Os vínculos com publicações também serão removidos.');">
+            <input type="hidden" name="status" value="{{ status }}">
+            <button class="btn btn-danger btn-sm" title="Excluir conceito">🗑</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="empty">Nenhum conceito extraído ainda. Execute o pipeline (task “Extração de conceitos”).</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

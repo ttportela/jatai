@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block topbar %}Projetos{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>Projetos de pesquisa</h1>
+  <p class="muted">Crie, abra e gerencie projetos. Cada projeto tem banco, documentos e histórico independentes.</p>
+</div>
+
+<form method="post" action="/projetos" class="card form-inline">
+  <input type="text" name="name" placeholder="Nome do projeto" required>
+  <input type="text" name="description" placeholder="Descrição (opcional)">
+  <button type="submit" class="btn">Criar projeto</button>
+</form>
+
+{% if projects %}
+<table class="table">
+  <thead>
+    <tr>
+      <th>Nome</th><th>Identificador</th><th>Descrição</th><th>Publicações</th><th>Status</th><th>Criado em</th><th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for p in projects %}
+    <tr>
+      <td><a href="/projetos/{{ p.slug }}"><strong>{{ p.name }}</strong></a>{% if current_project == p.slug %} <span class="badge badge-ativo">aberto</span>{% endif %}</td>
+      <td><code>{{ p.slug }}</code></td>
+      <td class="muted">{{ p.description }}</td>
+      <td>{{ p.publications }}</td>
+      <td><span class="badge badge-{{ p.status }}">{{ p.status }}</span></td>
+      <td class="muted">{{ p.created_at[:10] }}</td>
+      <td class="actions">
+        <a class="btn btn-ghost btn-sm" href="/projetos/{{ p.slug }}">Abrir</a>
+        <form method="post" action="/projetos/{{ p.slug }}/status" class="inline">
+          <input type="hidden" name="status" value="{{ 'arquivado' if p.status == 'ativo' else 'ativo' }}">
+          <button class="btn btn-ghost btn-sm">{{ 'Arquivar' if p.status == 'ativo' else 'Ativar' }}</button>
+        </form>
+        <form method="post" action="/projetos/{{ p.slug }}/duplicate" class="inline">
+          <button class="btn btn-ghost btn-sm">Duplicar</button>
+        </form>
+        <form method="post" action="/projetos/{{ p.slug }}/delete" class="inline"
+              onsubmit="return confirm('Excluir o projeto {{ p.name }} e todo o workspace? Esta ação é irreversível.') && prompt('Digite o slug ({{ p.slug }}) para confirmar') === '{{ p.slug }}';">
+          <input type="hidden" name="confirm" value="{{ p.slug }}">
+          <button class="btn btn-danger btn-sm">Excluir</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="card empty">
+  <p>Nenhum projeto ainda. Crie o primeiro acima para começar.</p>
+</div>
+{% endif %}
+{% endblock %}

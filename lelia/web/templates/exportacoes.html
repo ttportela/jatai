@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block topbar %}{{ project.name }} — Exportações{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>Exportações e relatórios</h1>
+  <p class="muted"><a href="/projetos/{{ project.slug }}">← voltar ao projeto</a></p>
+</div>
+
+<div class="card">
+  <h2 class="card-title">Formatos</h2>
+  <table class="table">
+    <thead><tr><th>Formato</th><th>Conteúdo</th><th>Escopo</th><th></th></tr></thead>
+    <tbody>
+      {% for fmt, (media, ext, fn) in formats.items() %}
+      <tr>
+        <td><code>{{ fmt }}</code> <span class="muted small">{{ ext }}</span></td>
+        <td class="muted small">
+          {% if fmt == 'bibtex' %}Referências bibliográficas
+          {% elif fmt == 'ris' %}Referências (Research Information Systems)
+          {% elif fmt == 'csv' %}Dados tabulares do catálogo
+          {% elif fmt == 'json' %}Metadados + classificações + decisões + evidências
+          {% elif fmt == 'prisma' %}Fluxo do processo de seleção{% endif %}
+        </td>
+        <td>
+          <form method="get" action="/projetos/{{ project.slug }}/exportar" class="inline">
+            <input type="hidden" name="formato" value="{{ fmt }}">
+            {% if fmt != 'prisma' %}
+            <select name="estado">
+              <option value="">Todas ({{ stats.papers_total }})</option>
+              <option value="incluido">Incluídas ({{ stats.states.get('incluido', 0) }})</option>
+              <option value="excluido">Excluídas ({{ stats.states.get('excluido', 0) }})</option>
+              <option value="novo">Pendentes ({{ stats.states.get('novo', 0) }})</option>
+              <option value="talvez">Talvez ({{ stats.states.get('talvez', 0) }})</option>
+            </select>
+            {% endif %}
+            <button class="btn btn-sm" type="submit">Baixar</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="card">
+  <h2 class="card-title">Relatórios disponíveis</h2>
+  <ul class="event-list">
+    <li><strong>PRISMA</strong> — diagrama de fluxo identificação → triagem → inclusão (contagens reais do banco)</li>
+    <li><strong>JSON completo</strong> — papers com análises, decisões do agente/humanas e evidências</li>
+    <li><strong>CSV/BibTeX/RIS</strong> — metadados bibliográficos prontos para importação em outras ferramentas</li>
+  </ul>
+  <p class="muted small">Exportações respeitam o filtro de estado escolhido. O histórico de execuções e decisões pode ser consultado em <a href="/sistema/historico">Histórico</a>.</p>
+</div>
+{% endblock %}

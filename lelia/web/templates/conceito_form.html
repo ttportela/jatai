@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block topbar %}{{ project.name }} — {{ 'Editar' if concept else 'Novo' }} conceito{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>{{ 'Editar conceito' if concept else 'Novo conceito' }}</h1>
+  <p class="muted"><a href="/projetos/{{ project.slug }}/conceitos">← voltar aos conceitos</a></p>
+</div>
+
+<div class="card" style="max-width:720px">
+  <form method="post" action="{{ action }}" class="form-stack">
+    <label>Termo *
+      <input type="text" name="term" required maxlength="300"
+             value="{{ concept.term if concept else '' }}">
+    </label>
+    <label>Descrição
+      <textarea name="description" rows="4">{{ concept.description if concept else '' }}</textarea>
+    </label>
+    <label>Termos relacionados <span class="muted small">(separados por vírgula)</span>
+      <input type="text" name="related_terms"
+             value="{{ related_text if concept else '' }}"
+             placeholder="termo1, termo2">
+    </label>
+    <label>Status
+      <select name="status">
+        {% for st in statuses %}
+        <option value="{{ st }}" {% if concept and concept.status == st %}selected{% endif %}>{{ st }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    {% if concept %}
+    <p class="muted small">Origem: {{ concept.origin }} · frequência: {{ concept.frequency }} · iteração #{{ concept.iteration }}</p>
+    {% endif %}
+    <div class="actions-row">
+      <button class="btn" type="submit">Salvar</button>
+      <a class="btn btn-ghost" href="/projetos/{{ project.slug }}/conceitos">Cancelar</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

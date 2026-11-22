@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block topbar %}{{ project.name }} — Avaliação{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>Avaliação da qualidade</h1>
+  <p class="muted"><a href="/projetos/{{ project.slug }}">← voltar ao projeto</a> · notas de 0,0 a 1,0 para cada critério AQ cadastrado</p>
+</div>
+
+{% if not criteria %}
+<div class="card"><p class="muted">Nenhum critério de qualidade ativo. Cadastre critérios AQ na <a href="/projetos/{{ project.slug }}/configuracao">configuração da pesquisa</a> (aba Avaliação da Qualidade).</p></div>
+{% else %}
+<form method="post" action="/projetos/{{ project.slug }}/qualidade/avaliacao">
+<input type="hidden" name="states" value="{{ states }}">
+<input type="hidden" name="page" value="{{ page }}">
+
+<div class="card">
+  <div class="form-inline" style="margin-bottom:10px">
+    <span class="muted small">Publicações:</span>
+    {% set base_qs %}?page=1{% endset %}
+    <a class="btn btn-sm {{ 'btn-primary' if states == 'incluido' else 'btn-ghost' }}" href="{{ base_qs }}&states=incluido">Incluídas</a>
+    <a class="btn btn-sm {{ 'btn-primary' if states == 'triagem' else 'btn-ghost' }}" href="{{ base_qs }}&states=novo,talvez,pendente">Em triagem</a>
+    <a class="btn btn-sm {{ 'btn-primary' if states == 'todos' else 'btn-ghost' }}" href="{{ base_qs }}&states=todos">Todas</a>
+    <span class="muted small" style="margin-left:auto">{{ total }} publicação(ões) · {{ criteria|length }} critério(s)</span>
+  </div>
+
+  <div style="overflow-x:auto">
+  <table class="table">
+    <thead>
+      <tr>
+        <th style="min-width:220px">Publicação</th>
+        {% for c in criteria %}
+        <th style="min-width:90px" title="{{ c.description }}">{{ c.code }}<div class="muted small" style="font-weight:400">w={{ c.weight }}</div></th>
+        {% endfor %}
+        <th style="min-width:80px">Nota final</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in papers %}
+      <tr>
+        <td>
+          <a href="/projetos/{{ project.slug }}/publicacoes/{{ p.id }}">{{ p.title[:80] }}{% if p.title|length > 80 %}…{% endif %}</a>
+          <div class="muted small">{{ p.year or '—' }} · {{ p.state }}</div>
+        </td>
+        {% for c in criteria %}
+        {% set sc = scores.get((p.id, c.id)) %}
+        <td>
+          <input type="number" name="s_{{ p.id }}_{{ c.id }}" min="0" max="1" step="0.05"
+                 value="{{ '%.2f' | format(sc) if sc is not none else '' }}"
+                 placeholder="—" style="width:70px;text-align:center">
+        </td>
+        {% endfor %}
+        <td><strong>{% if totals.get(p.id) is not none %}{{ '%.2f' | format(totals[p.id]) }}{% else %}—{% endif %}</strong></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="{{ criteria|length + 2 }}" class="empty">Nenhuma publicação neste recorte.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+
+  {% if pages > 1 %}
+  <div class="pagination">
+    {% set win = 2 %}
+    {% set pstart = [1, page - win] | max %}
+    {% set pend = [pages, page + win] | min %}
+    <a class="btn btn-ghost btn-sm" href="?states={{ states }}&page={{ page - 1 }}" {% if page == 1 %}style="opacity:.4;pointer-events:none"{% endif %}>‹ Anterior</a>
+    {% if pstart > 1 %}<span class="muted small">…</span>{% endif %}
+    {% for p in range(pstart, pend + 1) %}
+      {% if p == page %}<span class="btn btn-sm btn-primary">{{ p }}</span>
+      {% else %}<a class="btn btn-ghost btn-sm" href="?states={{ states }}&page={{ p }}">{{ p }}</a>{% endif %}
+    {% endfor %}
+    {% if pend < pages %}<span class="muted small">…</span>{% endif %}
+    <a class="btn btn-ghost btn-sm" href="?states={{ states }}&page={{ page + 1 }}" {% if page == pages %}style="opacity:.4;pointer-events:none"{% endif %}>Próxima ›</a>
+    <a class="btn btn-ghost btn-sm" href="?states={{ states }}&page={{ pages }}" {% if page == pages %}style="opacity:.4;pointer-events:none"{% endif %}>Última »</a>
+    <span class="muted small">({{ total }} resultados)</span>
+  </div>
+  {% endif %}
+
+  <div style="margin-top:12px;display:flex;gap:8px;align-items:center">
+    <button class="btn btn-primary" type="submit">Salvar notas</button>
+    <span class="muted small">Deixe a célula vazia para não alterar a nota existente.</span>
+  </div>
+</div>
+</form>
+{% endif %}
+{% endblock %}
+</file_path>
+</Users/tarlisportela/workdir/lelia/lelia/web/templates/avaliacao.html

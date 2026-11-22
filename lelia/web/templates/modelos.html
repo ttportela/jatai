@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% block topbar %}{{ project.name }} — Modelos IA{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>Modelos IA (LLM - Large Language Models)</h1>
+  <p class="muted"><a href="/projetos/{{ project.slug }}/agente/pipeline">← Pipeline</a></p>
+</div>
+
+{% if request.query_params.get('status') %}<p class="notice">Status do provedor: <strong>{{ request.query_params.get('status') }}</strong></p>{% endif %}
+{% if request.query_params.get('sync') is not none %}<p class="notice">Sincronização: <strong>{{ request.query_params.get('sync') }}</strong></p>{% endif %}
+
+{% if syncing %}
+<div class="card" style="border-left:3px solid var(--accent, #2563eb)">
+  <span class="muted small">Sincronizando modelos dos provedores em segundo plano — os dados abaixo podem estar desatualizados. Recarregue a página em alguns segundos.</span>
+</div>
+{% endif %}
+
+<div>
+  <div class="card">
+    <h2 class="card-title">Provedores</h2>
+    <div style="overflow-x:auto">
+    <table class="table">
+      <thead><tr><th>Nome</th><th>Tipo</th><th>Endpoint</th><th>API key</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+        {% for p in providers %}
+        <tr>
+          <td style="white-space:nowrap"><a href="?provider={{ p.id }}"><strong>{{ p.name }}</strong></a></td>
+          <td><code>{{ p.provider }}</code></td>
+          <td class="muted small" style="max-width:480px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ p.endpoint }}">{{ p.endpoint }}</td>
+          <td class="muted small" style="white-space:nowrap">{% if p.api_key_ref %}{% if p.api_key_ref.startswith('env:') %}env:{{ p.api_key_ref[4:] }}{% elif p.api_key_ref.startswith('file:') %}arquivo{% else %}••••{{ p.api_key_ref[-4:] }}{% endif %}{% else %}—{% endif %}</td>
+          <td><span class="badge badge-{{ 'ativo' if p.status == 'disponivel' else 'arquivado' }}">{{ p.status }}</span>
+            <div class="muted small">{% if p.last_sync %}sync {{ p.last_sync.strftime('%d/%m %H:%M') }}{% else %}nunca sincronizado{% endif %}</div>
+            {% if p.last_error %}<div class="muted small" style="max-width:560px;word-break:break-word" title="{{ p.last_error }}">{{ p.last_error[:200] }}{% if p.last_error|length > 200 %}…{% endif %}</div>{% endif %}</td>
+          <td class="actions">
+            <a class="btn btn-ghost btn-sm" href="?provider={{ p.id }}&edit={{ p.id }}" title="Editar provedor">✎</a>
+            <form method="post" action="/projetos/{{ project.slug }}/agente/modelos/provedor/{{ p.id }}/testar" class="inline"><button class="btn btn-ghost btn-sm" title="Testar provedor">🤖</button></form>
+            <form method="post" action="/projetos/{{ project.slug }}/agente/modelos/provedor/{{ p.id }}/sincronizar" class="inline"><button class="btn btn-ghost btn-sm" title="Sincronizar modelos">🔄</button></form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    <details {% if edit_provider %}open{% endif %}>
+      <summary class="btn btn-ghost btn-sm" style="display:inline-block;margin-top:8px">{{ 'Editar provedor' if edit_provider else '+ Provedor' }}</summary>
+      <form method="post" action="/projetos/{{ project.slug }}/agente/modelos/provedor" class="form-grid" id="provider-form">
+        <input type="hidden" name="provider_id" value="{{ edit_provider.id if edit_provider else '' }}">
+        <label>Nome <input type="text" name="name" value="{{ edit_provider.name if edit_provider else '' }}" placeholder="Ollama local" required></label>
+        <label>Tipo
+          <select name="provider" id="provider-type">
+            {% for t in provider_types %}
+            <option value="{{ t.type }}" data-endpoint="{{ t.endpoint }}" {% if edit_provider and edit_provider.provider == t.type %}selected{% elif not edit_provider and t.type == 'ollama' %}selected{% endif %}>{{ t.label }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="span2">Endpoint <input type="text" name="endpoint" id="provider-endpoint" value="{{ edit_provider.endpoint if edit_provider else 'http://localhost:11434' }}"></label>
+        <label class="span2">API key <input type="password" name="api_key" placeholder="{{ 'deixe em branco para manter' if edit_provider and edit_provider.api_key_ref else 'sk-... (opcional para Ollama)' }}" autocomplete="off"></label>
+        <label class="span2 muted small">Ou referência: <code>env:NOME_VAR</code> / <code>file:/caminho</code> no campo abaixo (tem prioridade menor que a chave acima)</label>
+        <label class="span2">Referência de API key <input type="text" name="api_key_ref" placeholder="env:OPENAI_API_KEY"></label>
+        <div class="actions-row">
+          <button class="btn btn-sm" type="submit">Salvar</button>
+          {% if edit_provider %}<a class="btn btn-ghost btn-sm" href="?provider={{ edit_provider.id }}">Cancelar</a>{% endif %}
+        </div>
+      </form>
+    </details>
+  </div>
+
+  <div class="card">
+    <h2 class="card-title">Modelos
+      {% if provider_id %}— {{ provider_names.get(provider_id, 'provedor #' ~ provider_id) }}{% else %}— todos os provedores{% endif %}
+    </h2>
+    <p class="muted small" style="margin:-8px 0 10px">
+      ★ = modelo padrão do projeto, usado pelas tarefas que não têm modelo próprio.
+      {% for p in providers %}<a href="?provider={{ p.id }}" {% if provider_id == p.id %}style="font-weight:700"{% endif %}>{{ p.name }}</a> · {% endfor %}
+      <a href="?provider=todos" {% if provider_id is none %}style="font-weight:700"{% endif %}>Todos</a>
+    </p>
+    <form method="get" action="/projetos/{{ project.slug }}/agente/modelos" class="form-inline" style="margin-bottom:10px">
+      <input type="hidden" name="provider" value="{{ provider_sel }}">
+      <input type="text" name="q" value="{{ q }}" placeholder="Buscar por nome…" style="min-width:220px">
+      <select name="custo">
+        <option value="gratis" {% if custo == 'gratis' %}selected{% endif %}>Custo $0</option>
+        <option value="todos" {% if custo == 'todos' %}selected{% endif %}>Todos os custos</option>
+      </select>
+      <button class="btn btn-sm" type="submit">Filtrar</button>
+      {% if q or custo != 'gratis' %}<a class="btn btn-ghost btn-sm" href="?provider={{ provider_sel }}">Limpar</a>{% endif %}
+    </form>
+    <div style="overflow-x:auto">
+    <table class="table">
+      <thead><tr><th>Identificador</th><th>Provedor</th><th>Contexto</th><th>Saída máx.</th><th>Custo $/Mtok</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+        {% for m in models %}
+        <tr>
+          <td><code>{{ m.identifier }}</code>{% if m.multimodal %} <span class="badge badge-novo">multimodal</span>{% endif %}</td>
+          <td class="muted small">{{ provider_names.get(m.provider_id, '#' ~ m.provider_id) }}</td>
+          <td>{{ m.context_window or '—' }}</td>
+          <td>{{ m.max_output or '—' }}</td>
+          <td class="muted small">{{ m.cost_in_per_mtok }}/{{ m.cost_out_per_mtok }}</td>
+          <td>{% if m.status == 'removido' %}<span class="badge badge-arquivado">removido</span>{% else %}<span class="badge badge-ativo">ativo</span>{% endif %}</td>
+          <td class="actions">
+            {% if m.is_default %}<span title="Modelo padrão do projeto">★</span>
+            {% elif m.status != 'removido' %}<form method="post" action="/projetos/{{ project.slug }}/agente/modelos/modelo/{{ m.id }}/padrao?provider={{ provider_sel }}" class="inline"><button class="btn btn-ghost btn-sm" type="submit">Tornar padrão</button></form>{% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="empty">Nenhum modelo{% if q %} para “{{ q }}”{% endif %}. Use “Sincronizar” num provedor ou ajuste o filtro.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    <details>
+      <summary class="btn btn-ghost btn-sm" style="display:inline-block;margin-top:8px">+ Modelo manual</summary>
+      <form method="post" action="/projetos/{{ project.slug }}/agente/modelos/modelo" class="form-grid">
+        <input type="hidden" name="provider_id" value="{{ provider_id if provider_id else (providers[0].id if providers else '') }}">
+        <label class="span2">Identificador <input type="text" name="identifier" placeholder="llama3.1:8b" required></label>
+        <label>Contexto <input type="number" name="context_window" value="0"></label>
+        <label>Saída máx. <input type="number" name="max_output" value="0"></label>
+        <label>Temp. padrão <input type="number" name="default_temperature" value="0" step="0.1"></label>
+        <label>Custo entrada $/Mtok <input type="number" name="cost_in" value="0" step="0.01"></label>
+        <label>Custo saída $/Mtok <input type="number" name="cost_out" value="0" step="0.01"></label>
+        <label class="check"><input type="checkbox" name="multimodal"> Multimodal</label>
+        <label class="check"><input type="checkbox" name="is_default"> Padrão</label>
+        <div><button class="btn btn-sm" type="submit">Salvar</button></div>
+      </form>
+    </details>
+  </div>
+</div>
+
+<div class="card">
+  <h2 class="card-title">Uso</h2>
+  <p class="muted">Chamadas: <strong>{{ usage.calls }}</strong> · Tokens entrada: <strong>{{ usage.tokens_in }}</strong> · saída: <strong>{{ usage.tokens_out }}</strong> · custo estimado: <strong>${{ '%.4f' | format(usage.cost_usd) }}</strong></p>
+</div>
+
+<div class="card" id="templates">
+  <h2 class="card-title">Templates de prompt</h2>
+  {% for tp in templates %}
+  <details>
+    <summary><strong>{{ tp.name }}</strong> <code class="small">v{{ tp.version }}</code> <span class="muted small">{{ tp.task_type }}</span></summary>
+    <pre class="code-block">{{ tp.content }}</pre>
+  </details>
+  {% else %}
+  <p class="muted">Nenhum template customizado — as tarefas usam prompts embutidos versionados.</p>
+  {% endfor %}
+  <details>
+    <summary class="btn btn-ghost btn-sm" style="display:inline-block;margin-top:8px">+ Template</summary>
+    <form method="post" action="/projetos/{{ project.slug }}/agente/modelos/template" class="form-grid">
+      <label>Nome <input type="text" name="name" required></label>
+      <label>Versão <input type="text" name="version" value="1"></label>
+      <label>Tipo de tarefa <input type="text" name="task_type" placeholder="query_builder"></label>
+      <label class="span2">Conteúdo <textarea name="content" rows="8" required></textarea></label>
+      <div><button class="btn btn-sm" type="submit">Salvar</button></div>
+    </form>
+  </details>
+</div>
+<script>
+document.getElementById('provider-type')?.addEventListener('change', function () {
+  const ep = document.getElementById('provider-endpoint');
+  const opt = this.selectedOptions[0];
+  const preset = opt.dataset.endpoint || '';
+  // preenche o endpoint só se estiver vazio ou for um preset conhecido
+  const known = ['http://localhost:11434',
+    'https://openrouter.ai/api/v1',
+    'https://generativelanguage.googleapis.com/v1beta/openai',
+    'https://api.openai.com/v1'];
+  if (preset && (!ep.value || known.includes(ep.value))) ep.value = preset;
+});
+</script>
+{% endblock %}
