@@ -14,6 +14,8 @@ Tudo auditável, configurável e reproduzível.
 > baixar e analisar PDFs e classificar as evidências — registrando cada
 > decisão, prompt e resposta bruta das APIs.
 
+![Screen 01](screen01.png)
+
 ---
 
 ## Autor e contribuições
