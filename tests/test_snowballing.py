@@ -5,11 +5,11 @@ from types import SimpleNamespace
 
 from sqlalchemy import select
 
-from lelia.agents import runner
-from lelia.sources import openalex as openalex_mod
-from lelia.sources.base import RawRecord
-from lelia.storage.db import get_project_session
-from lelia.storage.models_project import (
+from jatai.agents import runner
+from jatai.sources import openalex as openalex_mod
+from jatai.sources.base import RawRecord
+from jatai.storage.db import get_project_session
+from jatai.storage.models_project import (
     Paper, PaperAnalysis, PaperSighting, ProjectSource)
 
 
@@ -68,7 +68,7 @@ def _run(slug):
 def _setup(slug, monkeypatch):
     _enable_openalex(slug)
     fake = FakeOpenAlex()
-    monkeypatch.setattr("lelia.sources.base.get_connector",
+    monkeypatch.setattr("jatai.sources.base.get_connector",
                         lambda stype, config=None: fake)
     return fake
 
@@ -120,7 +120,7 @@ def test_snowballing_importa_referencias_e_conta(slug, monkeypatch):
 
 def test_snowballing_sem_openalex_habilitada(slug, monkeypatch):
     fake = FakeOpenAlex()
-    monkeypatch.setattr("lelia.sources.base.get_connector",
+    monkeypatch.setattr("jatai.sources.base.get_connector",
                         lambda stype, config=None: fake)
     _mk_paper(slug, "Semente", doi="10.1/x")
     stats = _stats()
@@ -131,8 +131,8 @@ def test_snowballing_sem_openalex_habilitada(slug, monkeypatch):
 def test_snowballing_fallback_pdf_quando_sem_refs(slug, monkeypatch):
     """OpenAlex sem referenced_works -> extrai refs do PDF via LLM e
     resolve nas fontes (openalex + dblp), com sighting por fonte."""
-    from lelia.agents import references as refs_mod
-    from lelia.sources import dblp as dblp_mod
+    from jatai.agents import references as refs_mod
+    from jatai.sources import dblp as dblp_mod
 
     fake = _setup(slug, monkeypatch)
     seed = _mk_paper(slug, "Semente sem refs", doi="10.1/seed")
@@ -144,9 +144,9 @@ def test_snowballing_fallback_pdf_quando_sem_refs(slug, monkeypatch):
         refs_mod.ReferenceItem(title="Ref A", doi="10.1/refa", year=2020),
         refs_mod.ReferenceItem(title="Ref B", year=2021),
     ])
-    monkeypatch.setattr("lelia.agents.llm.chat_structured",
+    monkeypatch.setattr("jatai.agents.llm.chat_structured",
                         lambda *a, **kw: llm_result)
-    monkeypatch.setattr("lelia.agents.runner._paper_full_text",
+    monkeypatch.setattr("jatai.agents.runner._paper_full_text",
                         lambda *a, **kw: "TEXTO " * 200)
 
     # openalex resolve Ref A (por DOI); Ref B não existe lá
@@ -162,7 +162,7 @@ def test_snowballing_fallback_pdf_quando_sem_refs(slug, monkeypatch):
                               year=2021)]
 
     monkeypatch.setattr(
-        "lelia.sources.base.get_connector",
+        "jatai.sources.base.get_connector",
         lambda stype, config=None: fake if stype == "openalex" else FakeDBLP())
     with get_project_session(slug) as s:
         s.add(ProjectSource(source_type="dblp", name="DBLP",
@@ -199,7 +199,7 @@ def test_snowballing_fallback_desativado_por_param(slug, monkeypatch):
 
     def boom(*a, **kw):
         raise AssertionError("LLM não deveria ser chamado")
-    monkeypatch.setattr("lelia.agents.llm.chat_structured", boom)
+    monkeypatch.setattr("jatai.agents.llm.chat_structured", boom)
 
     stats = _stats()
     runner._snowballing(slug, _run(slug), 1,

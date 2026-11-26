@@ -5,9 +5,9 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 
-from lelia.catalog import service as catalog
-from lelia.storage.db import get_project_session
-from lelia.storage.models_project import (
+from jatai.catalog import service as catalog
+from jatai.storage.db import get_project_session
+from jatai.storage.models_project import (
     Criterion, Paper, PaperAnalysis, PaperSighting, ProjectSource)
 
 
@@ -168,7 +168,7 @@ def test_review_flow_niveis_mesmo_sem_analises(slug):
     _mk_criteria(slug)
     _mk(slug, "p1", "novo", ("fake",))
     with get_project_session(slug) as s:
-        from lelia.storage.models_project import Agent, AgentTaskConfig
+        from jatai.storage.models_project import Agent, AgentTaskConfig
         agent = s.scalar(select(Agent))
         if agent is None:
             agent = Agent(name="Agente", enabled=True, is_default=True)

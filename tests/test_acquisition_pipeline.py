@@ -5,9 +5,9 @@ from pathlib import Path
 import pymupdf
 import pytest
 
-from lelia.documents import acquisition as acq
-from lelia.documents.acquisition import providers as prov
-from lelia.documents.acquisition.validate import validate_pdf_file
+from jatai.documents import acquisition as acq
+from jatai.documents.acquisition import providers as prov
+from jatai.documents.acquisition.validate import validate_pdf_file
 
 
 def _real_pdf_bytes(text: str = "Artigo de teste " * 20) -> bytes:
@@ -21,8 +21,8 @@ def _real_pdf_bytes(text: str = "Artigo de teste " * 20) -> bytes:
 
 
 def _paper(slug, **kw):
-    from lelia.storage.db import get_project_session
-    from lelia.storage.models_project import Paper
+    from jatai.storage.db import get_project_session
+    from jatai.storage.models_project import Paper
     defaults = dict(title="Artigo X", doi="10.1/x", url="",
                     state="incluido", pdf_path="", authors="[]", year=2020)
     defaults.update(kw)
@@ -358,8 +358,8 @@ def test_pdf_hash_and_paperfile_dedup(slug, tmp_path, monkeypatch):
     p1 = acq.acquire_for_paper(slug, pid, ws)
     # segunda chamada retorna cedo por pdf_path preenchido
     assert acq.acquire_for_paper(slug, pid, ws) is None
-    from lelia.storage.db import get_project_session
-    from lelia.storage.models_project import PaperFile
+    from jatai.storage.db import get_project_session
+    from jatai.storage.models_project import PaperFile
     with get_project_session(slug) as s:
         files = s.query(PaperFile).filter_by(paper_id=pid).all()
         assert len(files) == 1

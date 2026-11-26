@@ -1,12 +1,12 @@
-"""Lelia Browser: detecção e anexo de PDFs + rotas."""
+"""Jataí Browser: detecção e anexo de PDFs + rotas."""
 
 import pymupdf
 import pytest
 
-from lelia import notifications, user_browser
-from lelia.catalog import service as catalog
-from lelia.storage.db import get_project_session
-from lelia.storage.models_project import Paper, PaperFile
+from jatai import notifications, user_browser
+from jatai.catalog import service as catalog
+from jatai.storage.db import get_project_session
+from jatai.storage.models_project import Paper, PaperFile
 from sqlalchemy import select
 
 
@@ -142,7 +142,7 @@ def test_open_for_paper_enqueues(slug):
     user_browser._state["thread"] = None
     called = []
     user_browser._queue.put  # noqa: B018 — sanity
-    import lelia.user_browser as ub
+    import jatai.user_browser as ub
     orig_start = ub._start
     ub._start = lambda: called.append(1)
     try:
@@ -177,7 +177,7 @@ def Path_exists(p):
 
 def test_route_opens_browser(slug, monkeypatch):
     from fastapi.testclient import TestClient
-    from lelia.app import create_app
+    from jatai.app import create_app
     pid = _mk(slug, url="https://publisher.com/article/1")
     opened = []
     monkeypatch.setattr(user_browser, "open_for_paper",
@@ -191,7 +191,7 @@ def test_route_opens_browser(slug, monkeypatch):
 
 def test_route_doi_fallback(slug, monkeypatch):
     from fastapi.testclient import TestClient
-    from lelia.app import create_app
+    from jatai.app import create_app
     pid = _mk(slug, url="", doi="10.1234/abc")
     opened = []
     monkeypatch.setattr(user_browser, "open_for_paper",
@@ -205,14 +205,14 @@ def test_route_doi_fallback(slug, monkeypatch):
 
 def test_publications_column_button(slug):
     from fastapi.testclient import TestClient
-    from lelia.app import create_app
+    from jatai.app import create_app
     _mk(slug, title="Com PDF", pdf_path="/tmp/x.pdf")
     _mk(slug, title="Sem PDF", url="https://ex.com/a")
     client = TestClient(create_app())
     html = client.get(f"/projetos/{slug}/publicacoes").text
     assert "/pdf-view" in html
     assert "/browser" in html
-    assert "Lelia Browser" in html
+    assert "Jataí Browser" in html
     assert html.count("🌐") >= 2  # botão por linha + toolbar
 
 
@@ -291,7 +291,7 @@ class _PipePage(_FakePage):
             self._on_wait(self.waits)
 
     def evaluate(self, expr, arg=None):
-        if "__leliaSetStatus" in expr:
+        if "__jataiSetStatus" in expr:
             self.statuses.append(arg)
         return None
 
@@ -391,7 +391,7 @@ def test_run_pipeline_aborts_when_browser_closed(slug, monkeypatch):
 
 def test_pipeline_route(slug, monkeypatch):
     from fastapi.testclient import TestClient
-    from lelia.app import create_app
+    from jatai.app import create_app
     opened = []
     monkeypatch.setattr(user_browser, "open_pipeline",
                         lambda s: opened.append(s) or 3)

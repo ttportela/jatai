@@ -5,9 +5,9 @@ from types import SimpleNamespace
 
 from sqlalchemy import select
 
-from lelia.agents import concepts, runner
-from lelia.storage.db import get_project_session
-from lelia.storage.models_project import Paper, PaperAnalysis
+from jatai.agents import concepts, runner
+from jatai.storage.db import get_project_session
+from jatai.storage.models_project import Paper, PaperAnalysis
 
 
 def _mk_paper(slug, title, state="incluido"):
@@ -47,7 +47,7 @@ def test_concept_extraction_avulsa_ignora_estado_e_marca(slug, monkeypatch):
     fake_result = concepts.ConceptsResult(concepts=[
         concepts.ConceptItem(term="conceito-x")])
     monkeypatch.setattr(
-        "lelia.agents.llm.chat_structured",
+        "jatai.agents.llm.chat_structured",
         lambda s, **kw: fake_result)
 
     stats = {"errors": []}
@@ -66,7 +66,7 @@ def test_concept_extraction_avulsa_ignora_estado_e_marca(slug, monkeypatch):
 
 
 def test_paper_analyses_expoe_model_name(slug):
-    from lelia.catalog import service as catalog
+    from jatai.catalog import service as catalog
 
     pid = _mk_paper(slug, "Com modelo")
     with get_project_session(slug) as s:

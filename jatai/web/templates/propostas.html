@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block topbar %}{{ project.name }} — Propostas{% endblock %}
+{% block content %}
+{% set kind_label = {'lacuna': 'Lacuna', 'tendencia': 'Tendência', 'limitacao': 'Limitação', 'oportunidade': 'Oportunidade'} %}
+{% set kind_color = {'lacuna': '#7c3aed', 'tendencia': '#0369a1', 'limitacao': '#b45309', 'oportunidade': '#047857'} %}
+{% set status_label = {'proposto': 'Proposta', 'em_analise': 'Em análise', 'priorizado': 'Prioridade', 'convertido': 'Convertida', 'descartado': 'Descartada'} %}
+<div class="page-header">
+  <h1>Propostas de pesquisa</h1>
+  <p class="muted"><a href="/projetos/{{ project.slug }}">← voltar ao projeto</a> · lacunas, tendências, limitações e oportunidades identificadas no catálogo</p>
+</div>
+
+<div class="linha-titulo">
+  <p>
+    <a class="btn btn-sm {{ 'btn-primary' if not status else 'btn-ghost' }}" href="?{% if kind %}kind={{ kind }}{% endif %}">Todas ({{ counts[''] }})</a>
+    {% for st in statuses %}
+    <a class="btn btn-sm {{ 'btn-primary' if status == st else 'btn-ghost' }}" href="?status={{ st }}{% if kind %}&kind={{ kind }}{% endif %}">{{ status_label[st] }} ({{ counts[st] }})</a>
+    {% endfor %}
+    {% if kind %}
+    <span class="badge" style="background:{{ kind_color[kind] }}22;color:{{ kind_color[kind] }};margin-left:8px">{{ kind_label[kind] }}</span>
+    <a class="btn btn-ghost btn-sm" href="?status={{ status }}">✕ limpar tipo</a>
+    {% endif %}
+  </p>
+  <span>
+    <form method="post" action="/projetos/{{ project.slug }}/propostas/gerar" class="inline"
+          onsubmit="return confirm('Gerar propostas com IA? Uma execução do agente será iniciada (1 chamada LLM).');">
+      <button class="btn" type="submit">✦ Gerar com IA</button>
+    </form>
+    <a class="btn btn-ghost" href="/projetos/{{ project.slug }}/propostas/novo">＋ Nova proposta</a>
+  </span>
+</div>
+
+<p class="muted small">Tipos:
+  {% for k in kinds %}
+  <a href="?{% if status %}status={{ status }}&{% endif %}kind={{ k }}" style="color:{{ kind_color[k] }}">{{ kind_label[k] }} ({{ kind_counts[k] }})</a>{% if not loop.last %} · {% endif %}
+  {% endfor %}
+</p>
+
+<div class="card">
+  {% for p in proposals %}
+  <div class="proposal-item" style="border:1px solid var(--border,#e5e5ea);border-radius:8px;padding:12px 14px;margin-bottom:10px">
+    <div style="display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap">
+      <span class="badge" style="background:{{ kind_color[p.kind] }}22;color:{{ kind_color[p.kind] }}">{{ kind_label.get(p.kind, p.kind) }}</span>
+      <strong style="flex:1;min-width:220px">{{ p.title }}</strong>
+      <span class="badge badge-{{ 'ativo' if p.status in ('priorizado','convertido') else 'arquivado' if p.status == 'descartado' else 'pausado' }}">{{ status_label.get(p.status, p.status) }}</span>
+      <span class="muted small">prioridade: {{ p.priority }}</span>
+    </div>
+    {% if p.summary %}<p class="small" style="margin:6px 0 0">{{ p.summary }}</p>{% endif %}
+    {% if p.notes %}<p class="small muted" style="margin:4px 0 0">📝 {{ p.notes }}</p>{% endif %}
+
+    <details style="margin-top:6px">
+      <summary class="small muted" style="cursor:pointer">Detalhes{% if p.evidence %} · {{ p.evidence|length }} evidência(s){% endif %}{% if p.questions %} · {{ p.questions|length }} pergunta(s){% endif %}</summary>
+      <div class="small" style="margin-top:8px">
+        {% if p.rationale %}<p><strong>Justificativa:</strong> {{ p.rationale }}</p>{% endif %}
+        {% if p.questions %}
+        <p><strong>Perguntas sugeridas:</strong></p>
+        <ul style="margin:0 0 8px;padding-left:18px">
+          {% for q in p.questions %}<li>{{ q }}</li>{% endfor %}
+        </ul>
+        {% endif %}
+        {% if p.evidence %}
+        <p><strong>Evidências no catálogo:</strong></p>
+        <ul style="margin:0 0 8px;padding-left:18px">
+          {% for ev in p.evidence %}
+          <li>{% if ev.paper_id %}<a href="/projetos/{{ project.slug }}/publicacoes/{{ ev.paper_id }}">{{ ev.title }}</a>{% else %}{{ ev.title }}{% endif %}
+            {% if ev.detail %}<span class="muted">— {{ ev.detail }}</span>{% endif %}</li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+        <p class="muted">Origem: {{ p.origin }} · iteração #{{ p.iteration }} · criada em {{ p.created_at.strftime('%d/%m/%Y %H:%M') if p.created_at else '—' }}
+          {% if p.converted_to %}· convertida em <code>{{ p.converted_to }}</code>{% endif %}</p>
+      </div>
+    </details>
+
+    <div class="actions" style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+      <a class="btn btn-ghost btn-sm" href="/projetos/{{ project.slug }}/propostas/{{ p.id }}/editar" title="Editar proposta">✎</a>
+      {% if p.status == 'proposto' %}
+      <form method="post" action="/projetos/{{ project.slug }}/propostas/{{ p.id }}/status" class="inline">
+        <input type="hidden" name="status" value="em_analise"><input type="hidden" name="filter_status" value="{{ status }}">
+        <button class="btn btn-ghost btn-sm" title="Marcar como em análise">▶</button>
+      </form>
+      {% endif %}
+      {% if p.status in ('em_analise', 'priorizado') %}
+      <form method="post" action="/projetos/{{ project.slug }}/propostas/{{ p.id }}/status" class="inline">
+        <input type="hidden" name="status" value="priorizado"><input type="hidden" name="filter_status" value="{{ status }}">
+        <button class="btn btn-ghost btn-sm" style="color:var(--warning,#b45309)" title="Priorizar">📌</button>
+      </form>
+      {% endif %}
+      {% if p.status == 'descartado' %}
+      <form method="post" action="/projetos/{{ project.slug }}/propostas/{{ p.id }}/status" class="inline">
+        <input type="hidden" name="status" value="proposto"><input type="hidden" name="filter_status" value="{{ status }}">
+        <button class="btn btn-ghost btn-sm" title="Reabrir proposta">↩</button>
+      </form>
+      {% endif %}
+      {% if p.status in ('proposto', 'em_analise', 'priorizado') %}
+      <form method="post" action="/projetos/{{ project.slug }}/propostas/{{ p.id }}/converter" class="inline"
+            onsubmit="return confirm('Converter esta proposta? Ela será marcada como convertida.');"
+            style="display:inline-flex;gap:4px;align-items:center">
+        <select name="destino" class="btn btn-ghost btn-sm" style="padding:2px 6px">
+          <option value="projeto">→ novo projeto</option>
+          <option value="questao">→ questões de pesquisa</option>
+        </select>
+        <button class="btn btn-sm" type="submit" title="Converter proposta">Converter</button>
+      </form>
+      <form method="post" action="/projetos/{{ project.slug }}/propostas/{{ p.id }}/status" class="inline">
+        <input type="hidden" name="status" value="descartado"><input type="hidden" name="filter_status" value="{{ status }}">
+        <button class="btn btn-ghost btn-sm" style="color:var(--danger)" title="Descartar proposta">✕</button>
+      </form>
+      {% endif %}
+      <form method="post" action="/projetos/{{ project.slug }}/propostas/{{ p.id }}/excluir" class="inline"
+            onsubmit="return confirm('Excluir a proposta &quot;{{ p.title }}&quot;?');">
+        <input type="hidden" name="status" value="{{ status }}">
+        <button class="btn btn-danger btn-sm" title="Excluir proposta">🗑</button>
+      </form>
+    </div>
+  </div>
+  {% else %}
+  <p class="empty">Nenhuma proposta{{ ' neste filtro' if status or kind else '' }}.
+    Clique em <strong>✦ Gerar com IA</strong> para o agente analisar o catálogo,
+    ou cadastre manualmente com <strong>＋ Nova proposta</strong>.</p>
+  {% endfor %}
+</div>
+{% endblock %}

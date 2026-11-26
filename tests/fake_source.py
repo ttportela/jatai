@@ -1,6 +1,6 @@
 """Conector fake programável para testes do pipeline de execução."""
 
-from lelia.sources.base import RawRecord, SourceConnector
+from jatai.sources.base import RawRecord, SourceConnector
 
 
 class FakeConnector(SourceConnector):

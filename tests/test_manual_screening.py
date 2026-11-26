@@ -4,9 +4,9 @@ import json as _json
 
 from sqlalchemy import select
 
-from lelia.catalog import service as catalog
-from lelia.storage.db import get_project_session
-from lelia.storage.models_project import (
+from jatai.catalog import service as catalog
+from jatai.storage.db import get_project_session
+from jatai.storage.models_project import (
     Criterion, Decision, Evidence, Paper, PaperAnalysis)
 
 
@@ -115,7 +115,7 @@ def test_save_manual_screening_validacoes(slug):
 def test_manual_screening_alimenta_review_flow(slug):
     """Triagem manual conta no quadro fonte × fase do dashboard."""
     _mk_criteria(slug)
-    from lelia.storage.models_project import PaperSighting
+    from jatai.storage.models_project import PaperSighting
     pid = _mk_paper(slug)
     with get_project_session(slug) as s:
         s.add(PaperSighting(paper_id=pid, source="fake", external_id="x",

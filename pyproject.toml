@@ -3,10 +3,13 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "lelia"
+name = "jatai"
 version = "0.1.0"
-description = "Lelia — local research agent for scientific publications"
+description = "Jataí — local research agent for scientific publications"
 requires-python = ">=3.11"
+license = "GPL-3.0-or-later"
+authors = [{ name = "Tarlis Tortelli" }]
+urls = { Repository = "https://github.com/tarlis/jatai" }
 dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.30",
@@ -28,7 +31,7 @@ dev = [
 ]
 
 [project.scripts]
-lelia = "lelia.cli:main"
+jatai = "jatai.cli:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["lelia"]
+packages = ["jatai"]

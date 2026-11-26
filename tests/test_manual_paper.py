@@ -2,10 +2,10 @@
 
 from sqlalchemy import func, select
 
-from lelia.catalog import service as catalog
-from lelia.catalog.bibtex import parse_bibtex
-from lelia.storage.db import get_project_session
-from lelia.storage.models_project import Paper, PaperSighting
+from jatai.catalog import service as catalog
+from jatai.catalog.bibtex import parse_bibtex
+from jatai.storage.db import get_project_session
+from jatai.storage.models_project import Paper, PaperSighting
 
 BIB = """
 @article{silva2024,

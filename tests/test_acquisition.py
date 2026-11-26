@@ -1,8 +1,8 @@
-"""Testes unitários de lelia.documents.acquisition."""
+"""Testes unitários de jatai.documents.acquisition."""
 
 import pytest
 
-from lelia.documents import acquisition as acq
+from jatai.documents import acquisition as acq
 
 
 def _real_pdf_bytes() -> bytes:
@@ -19,8 +19,8 @@ def _real_pdf_bytes() -> bytes:
 
 @pytest.fixture
 def paper(slug):
-    from lelia.storage.db import get_project_session
-    from lelia.storage.models_project import Paper
+    from jatai.storage.db import get_project_session
+    from jatai.storage.models_project import Paper
     with get_project_session(slug) as s:
         p = Paper(title="Artigo teste", doi="10.1/test",
                   url="https://example.org/paper", state="incluido",
@@ -114,8 +114,8 @@ def test_download_pdf_accepts_pdf(tmp_path, monkeypatch):
 
 def test_acquire_direct_pdf_url(slug, paper, tmp_path, monkeypatch):
     """URL do paper já é PDF e não tem DOI -> baixa direto, sem APIs."""
-    from lelia.storage.db import get_project_session
-    from lelia.storage.models_project import Paper
+    from jatai.storage.db import get_project_session
+    from jatai.storage.models_project import Paper
     with get_project_session(slug) as s:
         p = s.get(Paper, paper)
         p.doi = ""
@@ -170,8 +170,8 @@ def test_acquire_no_browser_no_fallback(slug, paper, tmp_path, monkeypatch):
 
 
 def test_acquire_skips_existing_pdf(slug, paper, monkeypatch):
-    from lelia.storage.db import get_project_session
-    from lelia.storage.models_project import Paper
+    from jatai.storage.db import get_project_session
+    from jatai.storage.models_project import Paper
     with get_project_session(slug) as s:
         s.get(Paper, paper).pdf_path = "/tmp/já.pdf"
         s.commit()

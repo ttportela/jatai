@@ -1,8 +1,0 @@
-[Desktop Entry]
-Type=Application
-Name=Lelia Manager
-Comment=Gerencia a instalação e execução do Lelia
-Exec=lelia_manager
-Icon=lelia
-Categories=Science;Office;
-Terminal=false

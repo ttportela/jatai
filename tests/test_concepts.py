@@ -4,9 +4,9 @@ from types import SimpleNamespace
 
 from sqlalchemy import select
 
-from lelia.agents import concepts
-from lelia.storage.db import get_project_session
-from lelia.storage.models_project import Concept, Paper, PaperAnalysis
+from jatai.agents import concepts
+from jatai.storage.db import get_project_session
+from jatai.storage.models_project import Concept, Paper, PaperAnalysis
 
 
 def _mk_paper(slug, title="Artigo X", doi="10.1/c"):
@@ -67,8 +67,8 @@ def test_persist_ignora_termos_vazios_e_duplicados_na_resposta(slug):
 
 
 def test_persist_vincula_conceitos_ao_paper(slug):
-    from lelia.catalog import service as catalog
-    from lelia.storage.models_project import ConceptPaper
+    from jatai.catalog import service as catalog
+    from jatai.storage.models_project import ConceptPaper
 
     pid = _mk_paper(slug)
     pid2 = _mk_paper(slug, "Outro", doi="10.1/d")
@@ -92,7 +92,7 @@ def test_paper_concepts_fallback_analises_antigas(slug):
     """Análises 'conceitos' gravadas antes do vínculo ainda listam os
     conceitos pelo termo."""
     import json as _json
-    from lelia.catalog import service as catalog
+    from jatai.catalog import service as catalog
 
     pid = _mk_paper(slug)
     with get_project_session(slug) as s:
@@ -109,7 +109,7 @@ def test_paper_concepts_fallback_analises_antigas(slug):
 
 
 def test_save_paper_concept_inclui_edita_e_reutiliza(slug):
-    from lelia.catalog import service as catalog
+    from jatai.catalog import service as catalog
 
     pid = _mk_paper(slug)
     cid = catalog.save_paper_concept(
@@ -184,7 +184,7 @@ def test_build_prompt_orienta_por_areas(slug):
 
 
 def test_save_concept_cria_e_edita(slug):
-    from lelia.catalog import service as catalog
+    from jatai.catalog import service as catalog
 
     cid = catalog.save_concept(
         slug, "Interpretação de modelos", "Métodos de XAI",
@@ -209,7 +209,7 @@ def test_save_concept_cria_e_edita(slug):
 
 
 def test_save_concept_reutiliza_mesmo_termo(slug):
-    from lelia.catalog import service as catalog
+    from jatai.catalog import service as catalog
 
     cid1 = catalog.save_concept(slug, "LoRA", status="aceito")
     cid2 = catalog.save_concept(slug, "lora", "Low-Rank Adaptation")
@@ -219,15 +219,15 @@ def test_save_concept_reutiliza_mesmo_termo(slug):
 
 
 def test_save_concept_sem_termo(slug):
-    from lelia.catalog import service as catalog
+    from jatai.catalog import service as catalog
 
     assert catalog.save_concept(slug, "  ") is None
     assert catalog.save_concept(slug, "X", concept_id=99999) is None
 
 
 def test_delete_concept_remove_vinculos(slug):
-    from lelia.catalog import service as catalog
-    from lelia.storage.models_project import ConceptPaper
+    from jatai.catalog import service as catalog
+    from jatai.storage.models_project import ConceptPaper
 
     pid = _mk_paper(slug)
     cid = catalog.save_paper_concept(slug, pid, "XAI", "desc")

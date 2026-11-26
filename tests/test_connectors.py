@@ -4,8 +4,8 @@ from urllib.parse import parse_qs, urlparse
 
 import pytest
 
-from lelia.sources import dblp, openalex
-from lelia.search.adapters.dblp import compile_expression as dblp_compile
+from jatai.sources import dblp, openalex
+from jatai.search.adapters.dblp import compile_expression as dblp_compile
 
 
 class _FakeResp:
@@ -209,8 +209,8 @@ def test_openalex_boolean_expression_passthrough():
 
 # ---------- Semantic Scholar ----------
 
-from lelia.sources import semanticscholar
-from lelia.sources.base import get_connector, implemented_source_types
+from jatai.sources import semanticscholar
+from jatai.sources.base import get_connector, implemented_source_types
 
 
 def _s2_paper(**kw):
@@ -344,11 +344,11 @@ def test_s2_compiled_query_tolera_sintaxe_bulk():
     conn = semanticscholar.SemanticScholarConnector(min_interval=0)
     bulk_style = ('((mobility|trajectory|movelets)+("big data"|'
                   '"data mining"|analytics|classification))')
-    lelia_style = ('((mobility OR trajectory OR movelets) AND '
+    jatai_style = ('((mobility OR trajectory OR movelets) AND '
                    '("big data" OR "data mining" OR analytics OR '
                    'classification))')
     assert conn._compiled_query(bulk_style) == \
-        conn._compiled_query(lelia_style)
+        conn._compiled_query(jatai_style)
 
 
 def test_s2_429_backoff_exponencial(monkeypatch):
@@ -516,7 +516,7 @@ def test_openalex_year_vira_filter_date():
     conn.search("x", max_results=5)
     # params foram para last_request? search usa params locais; verificar
     # via filtro unitário
-    from lelia.sources.openalex import _year_date_filter
+    from jatai.sources.openalex import _year_date_filter
     assert _year_date_filter("2020-2024") == \
         "from_publication_date:2020-01-01,to_publication_date:2024-12-31"
     assert _year_date_filter("2019-") == "from_publication_date:2019-01-01"

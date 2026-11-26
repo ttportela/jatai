@@ -5,17 +5,17 @@ import json
 import pytest
 from sqlalchemy import func, select
 
-from lelia.agents import config_service, runner
-from lelia.research import service as research
-from lelia.storage.db import get_project_session
-from lelia.storage.models_project import Iteration, Run
+from jatai.agents import config_service, runner
+from jatai.research import service as research
+from jatai.storage.db import get_project_session
+from jatai.storage.models_project import Iteration, Run
 from tests.fake_source import FakeConnector, rec
 
 
 @pytest.fixture(autouse=True)
 def fake_connector(monkeypatch):
     FakeConnector.reset()
-    monkeypatch.setattr("lelia.catalog.service.get_connector",
+    monkeypatch.setattr("jatai.catalog.service.get_connector",
                         lambda stype, config=None: FakeConnector() if stype == "fake" else None)
     return FakeConnector
 
@@ -57,7 +57,7 @@ def test_zero_cost_limit_still_runs_free_tasks(slug, fake_connector):
 
 def test_cost_limit_skips_llm_tasks(slug, fake_connector, monkeypatch):
     """Com custo >= limite, tarefas uses_llm são puladas; livres executam."""
-    monkeypatch.setattr("lelia.agents.llm.llm_usage",
+    monkeypatch.setattr("jatai.agents.llm.llm_usage",
                         lambda s: {"cost_usd": 5.0})
     fake_connector.results = {"q1": [rec("P1")]}
     research.create_query(slug, "q1", "fake", status="pendente")

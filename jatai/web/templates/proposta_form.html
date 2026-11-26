@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block topbar %}{{ project.name }} — {{ 'Editar' if proposal else 'Nova' }} proposta{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>{{ 'Editar proposta' if proposal else 'Nova proposta' }}</h1>
+  <p class="muted"><a href="/projetos/{{ project.slug }}/propostas">← voltar às propostas</a></p>
+</div>
+
+<div class="card" style="max-width:760px">
+  <form method="post" action="{{ action }}" class="form-stack">
+    <label>Título *
+      <input type="text" name="title" required maxlength="300"
+             value="{{ proposal.title if proposal else '' }}">
+    </label>
+    <div class="form-row">
+      <label>Tipo
+        <select name="kind">
+          {% for k in kinds %}
+          <option value="{{ k }}" {% if proposal and proposal.kind == k %}selected{% endif %}>{{ k }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Prioridade
+        <select name="priority">
+          {% for pr in priorities %}
+          <option value="{{ pr }}" {% if proposal and proposal.priority == pr %}selected{% endif %}>{{ pr }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    </div>
+    <label>Resumo
+      <textarea name="summary" rows="4" placeholder="O que seria estudado, método, população, desfecho…">{{ proposal.summary if proposal else '' }}</textarea>
+    </label>
+    <label>Justificativa <span class="muted small">(por que o catálogo sugere isso)</span>
+      <textarea name="rationale" rows="3">{{ proposal.rationale if proposal else '' }}</textarea>
+    </label>
+    <label>Perguntas de pesquisa sugeridas <span class="muted small">(uma por linha)</span>
+      <textarea name="questions" rows="4" placeholder="Como X afeta Y em Z?&#10;Qual a eficácia de A vs B?">{{ (proposal.questions | join('\n')) if proposal and proposal.questions else '' }}</textarea>
+    </label>
+    <label>Anotações do pesquisador
+      <textarea name="notes" rows="3" placeholder="Refinamentos, dúvidas, próximos passos…">{{ proposal.notes if proposal else '' }}</textarea>
+    </label>
+    {% if proposal %}
+    <p class="muted small">Origem: {{ proposal.origin }} · status: {{ proposal.status }} · prioridade: {{ proposal.priority }}
+      {% if proposal.converted_to %}· convertida em {{ proposal.converted_to }}{% endif %}</p>
+    {% endif %}
+    <div class="actions-row">
+      <button class="btn" type="submit">Salvar</button>
+      <a class="btn btn-ghost" href="/projetos/{{ project.slug }}/propostas">Cancelar</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

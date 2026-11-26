@@ -180,3 +180,5 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 .DS_Store
+PLAN.md
+UX.md

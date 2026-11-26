@@ -5,17 +5,17 @@ import json
 import pytest
 from sqlalchemy import select
 
-from lelia.agents import runner
-from lelia.research import service as research
-from lelia.storage.db import get_project_session
-from lelia.storage.models_project import AgentTaskConfig, Query
+from jatai.agents import runner
+from jatai.research import service as research
+from jatai.storage.db import get_project_session
+from jatai.storage.models_project import AgentTaskConfig, Query
 from tests.fake_source import FakeConnector, rec
 
 
 @pytest.fixture(autouse=True)
 def fake_connector(monkeypatch):
     FakeConnector.reset()
-    monkeypatch.setattr("lelia.catalog.service.get_connector",
+    monkeypatch.setattr("jatai.catalog.service.get_connector",
                         lambda stype, config=None: FakeConnector() if stype == "fake" else None)
     return FakeConnector
 
@@ -23,7 +23,7 @@ def fake_connector(monkeypatch):
 def _mk_run(slug, **snap):
     cfg = {"max_iterations": 1, "max_papers": 0, "max_cost_usd": None, **snap}
     with get_project_session(slug) as s:
-        from lelia.storage.models_project import Run
+        from jatai.storage.models_project import Run
         r = Run(status="executando", agent_id=None,
                 config_snapshot=json.dumps(cfg))
         s.add(r)
@@ -74,7 +74,7 @@ def test_search_respects_max_papers_cap(slug, fake_connector):
     stats = {"queries": 0, "new_papers": 0, "new_terms": 0, "errors": []}
     runner._search(slug, run_id, 1, _mk_task(), stats)
     # FakeConnector já fatia por max_results; verifica via ingest
-    from lelia.catalog.service import paper_count
+    from jatai.catalog.service import paper_count
     assert paper_count(slug) == 3
 
 

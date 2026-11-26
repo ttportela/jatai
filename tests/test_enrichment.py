@@ -3,9 +3,9 @@
 import pytest
 from sqlalchemy import select
 
-from lelia import enrichment
-from lelia.storage.db import get_project_session
-from lelia.storage.models_project import Paper
+from jatai import enrichment
+from jatai.storage.db import get_project_session
+from jatai.storage.models_project import Paper
 
 
 class _FakePage:

@@ -5,9 +5,9 @@ import json
 import httpx
 import pytest
 
-from lelia.agents import llm
-from lelia.storage.db import get_project_session
-from lelia.storage.models_project import LLMCall, LLMModel, LLMProvider
+from jatai.agents import llm
+from jatai.storage.db import get_project_session
+from jatai.storage.models_project import LLMCall, LLMModel, LLMProvider
 
 
 def _provider(slug, ptype="openrouter", key="sk-test"):
@@ -101,7 +101,7 @@ def test_chat_structured_openai_fallback_sem_schema(slug, monkeypatch):
 
 
 def test_sync_openai_models_importa_e_precifica(slug, monkeypatch):
-    from lelia.agents import config_service
+    from jatai.agents import config_service
 
     pid, _ = _provider(slug)
 
@@ -127,7 +127,7 @@ def test_sync_openai_models_importa_e_precifica(slug, monkeypatch):
 
 def test_provider_status_openai_compat(slug, monkeypatch):
     pid, _ = _provider(slug)
-    from lelia.agents import config_service
+    from jatai.agents import config_service
     p = config_service.get_provider(slug, pid)
 
     monkeypatch.setattr(llm.httpx, "get",
@@ -255,12 +255,12 @@ def test_google_endpoint_errado_e_normalizado(slug, monkeypatch):
 
 
 def config_service_get(slug, pid):
-    from lelia.agents import config_service
+    from jatai.agents import config_service
     return config_service.get_provider(slug, pid)
 
 
 def test_test_provider_grava_last_error(slug, monkeypatch):
-    from lelia.agents import config_service
+    from jatai.agents import config_service
 
     pid, _ = _provider(slug, ptype="google",
                        key="bad-key")

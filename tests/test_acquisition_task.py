@@ -4,9 +4,9 @@ from types import SimpleNamespace
 
 from sqlalchemy import select
 
-from lelia.agents import runner
-from lelia.storage.db import get_project_session
-from lelia.storage.models_project import Paper
+from jatai.agents import runner
+from jatai.storage.db import get_project_session
+from jatai.storage.models_project import Paper
 
 
 def _mk(slug, title, doi="10.1/x", state="incluido", pdf=""):
@@ -33,7 +33,7 @@ def _rid(slug):
 
 def test_acquisition_selects_triaged_without_pdf(slug, monkeypatch):
     called = []
-    monkeypatch.setattr("lelia.documents.acquisition.acquire_for_paper",
+    monkeypatch.setattr("jatai.documents.acquisition.acquire_for_paper",
                         lambda s, pid, ws, sources=None, **kw: called.append(pid) or "/tmp/x.pdf")
     _mk(slug, "Incluído")
     _mk(slug, "Talvez", state="talvez")
@@ -50,7 +50,7 @@ def test_acquisition_selects_triaged_without_pdf(slug, monkeypatch):
 
 def test_acquisition_max_pdfs_limit(slug, monkeypatch):
     called = []
-    monkeypatch.setattr("lelia.documents.acquisition.acquire_for_paper",
+    monkeypatch.setattr("jatai.documents.acquisition.acquire_for_paper",
                         lambda s, pid, ws, sources=None, **kw: called.append(pid) or None)
     for i in range(5):
         _mk(slug, f"P{i}", doi=f"10.1/{i}")
@@ -61,7 +61,7 @@ def test_acquisition_max_pdfs_limit(slug, monkeypatch):
 
 def test_acquisition_unlimited(slug, monkeypatch):
     called = []
-    monkeypatch.setattr("lelia.documents.acquisition.acquire_for_paper",
+    monkeypatch.setattr("jatai.documents.acquisition.acquire_for_paper",
                         lambda s, pid, ws, sources=None, **kw: called.append(pid) or None)
     for i in range(5):
         _mk(slug, f"P{i}", doi=f"10.2/{i}")
@@ -73,7 +73,7 @@ def test_acquisition_unlimited(slug, monkeypatch):
 def test_acquisition_error_counted(slug, monkeypatch):
     def boom(s, pid, ws, sources=None, **kw):
         raise RuntimeError("net down")
-    monkeypatch.setattr("lelia.documents.acquisition.acquire_for_paper", boom)
+    monkeypatch.setattr("jatai.documents.acquisition.acquire_for_paper", boom)
     _mk(slug, "P")
     stats = _stats()
     runner._acquisition(slug, _rid(slug), 0, _task(), stats)
@@ -92,7 +92,7 @@ def _mk_url(slug, title, url, doi="", state="incluido"):
 
 def test_acquisition_selects_pdf_url_without_doi(slug, monkeypatch):
     called = []
-    monkeypatch.setattr("lelia.documents.acquisition.acquire_for_paper",
+    monkeypatch.setattr("jatai.documents.acquisition.acquire_for_paper",
                         lambda s, pid, ws, sources=None, **kw:
                         called.append(pid) or "/tmp/x.pdf")
     _mk_url(slug, "PDF direto", "https://ceur-ws.org/Vol-1/x.pdf")

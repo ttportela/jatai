@@ -5,11 +5,11 @@ import json
 import pytest
 from sqlalchemy import select
 
-from lelia import notifications
-from lelia.catalog import service as catalog
-from lelia.agents import runner
-from lelia.storage.db import get_project_session
-from lelia.storage.models_project import DedupGroup, Notification, Paper, PaperSighting
+from jatai import notifications
+from jatai.catalog import service as catalog
+from jatai.agents import runner
+from jatai.storage.db import get_project_session
+from jatai.storage.models_project import DedupGroup, Notification, Paper, PaperSighting
 from types import SimpleNamespace
 
 
@@ -190,7 +190,7 @@ def test_merge_already_resolved_returns_false(slug):
 
 
 def test_normalization_removed():
-    from lelia.agents.config_service import TASK_TYPES
+    from jatai.agents.config_service import TASK_TYPES
     assert "normalization" not in [t["type"] for t in TASK_TYPES]
 
 

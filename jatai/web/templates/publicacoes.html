@@ -1,0 +1,281 @@
+{% extends "base.html" %}
+{% block topbar %}{{ project.name }} — Publicações{% endblock %}
+{% block content %}
+{% macro sort_url(col) -%}
+{%- set nd = 'desc' if (sort == col and dir == 'asc') or (sort != col and col == 'ano') else 'asc' -%}
+?page=1&q={{ filters.q }}&year={{ filters.year }}&fonte={{ filters.fonte }}&estado={{ filters.estado }}&pdf={{ filters.pdf }}&sort={{ col }}&dir={{ nd }}
+{%- endmacro %}
+{% macro page_url(p) -%}
+?page={{ p }}&q={{ filters.q }}&year={{ filters.year }}&fonte={{ filters.fonte }}&estado={{ filters.estado }}&pdf={{ filters.pdf }}&sort={{ sort }}&dir={{ dir }}
+{%- endmacro %}
+<div class="page-header">
+  <h1>Publicações <span class="muted small">({{ total }})</span></h1>
+  <p class="muted">Catálogo de artigos encontrados. <a href="/projetos/{{ project.slug }}">← voltar ao projeto</a></p>  
+</div>
+
+<div style="display: grid; grid-template-columns: auto 15%; gap: 16px;">
+<form method="get" action="/projetos/{{ project.slug }}/publicacoes" class="card filters">
+  <input type="text" name="q" value="{{ filters.q }}" placeholder="Buscar título, resumo ou autor…">
+  <select name="year">
+    <option value="">Ano: todos</option>
+    {% for y in years %}<option value="{{ y }}" {% if filters.year == y|string %}selected{% endif %}>{{ y }}</option>{% endfor %}
+  </select>
+  <select name="fonte">
+    <option value="">Fonte: todas</option>
+    {% for f in sources %}<option value="{{ f }}" {% if filters.fonte == f %}selected{% endif %}>{{ f }}</option>{% endfor %}
+  </select>
+  <select name="estado">
+    <option value="">Estado: todos</option>
+    {% for s in states %}<option value="{{ s.value }}" {% if filters.estado == s.value %}selected{% endif %}>{{ s.label }}</option>{% endfor %}
+  </select>
+  <select name="pdf">
+    <option value="">PDF: todos</option>
+    <option value="sim" {% if filters.pdf == 'sim' %}selected{% endif %}>Com PDF</option>
+    <option value="nao" {% if filters.pdf == 'nao' %}selected{% endif %}>Sem PDF</option>
+  </select>
+  <button class="btn btn-sm" type="submit">Filtrar</button>
+  <a class="btn btn-ghost btn-sm" href="/projetos/{{ project.slug }}/publicacoes">Limpar</a>
+</form>
+<div class="card" style="display:flex;align-items:center;
+     padding:10px 14px;flex-wrap:wrap">
+  <form method="post" action="/projetos/{{ project.slug }}/browser/pipeline" class="inline">
+    <button class="btn btn-sm" title="Percorrer automaticamente os artigos sem PDF">🌐 Jataí Browser</button>
+  </form>
+  <span class="muted small">Abre cada artigo sem PDF, baixa e avança.</span>
+</div>
+</div>
+
+<div class="linha-titulo">
+  <p class="muted small" style="margin-top:8px">
+    Exportar:
+    <a href="/projetos/{{ project.slug }}/exportar?formato=csv&estado={{ filters.estado }}">CSV</a> ·
+    <a href="/projetos/{{ project.slug }}/exportar?formato=bibtex&estado={{ filters.estado }}">BibTeX</a> ·
+    <a href="/projetos/{{ project.slug }}/exportar?formato=ris&estado={{ filters.estado }}">RIS</a> ·
+    <a href="/projetos/{{ project.slug }}/exportar?formato=prisma">PRISMA</a>
+  </p>
+<button class="btn" id="btn-nova-publicacao" type="button">＋ Nova publicação</button>
+</div>
+
+<!-- <div class="card" style="display:flex;gap:16px;align-items:center;
+     padding:10px 14px;margin:-6px 0 10px;flex-wrap:wrap">
+  <form method="post" action="/projetos/{{ project.slug }}/browser" class="inline">
+    <button class="btn btn-ghost btn-sm" title="Abrir o Jataí Browser (Chromium visível) para login em portais">🌐 Jataí Browser</button>
+  </form>
+  <form method="post" action="/projetos/{{ project.slug }}/browser/pipeline" class="inline">
+    <button class="btn btn-sm" title="Percorrer automaticamente os artigos sem PDF">▶ Pipeline de PDFs</button>
+  </form>
+  <span class="muted small">O pipeline abre cada artigo sem PDF no Jataí Browser, avança quando o PDF é detectado e permite pular pelo botão na janela.</span>
+</div> -->
+
+<div class="card">
+  <div class="form-inline" style="margin-bottom:10px">
+    <span class="muted small">Estado:</span>
+    {% set base_qs %}?q={{ filters.q }}&year={{ filters.year }}&fonte={{ filters.fonte }}&pdf={{ filters.pdf }}&sort={{ sort }}&dir={{ dir }}{% endset %}
+    <a class="btn btn-sm {{ 'btn-primary' if not filters.estado else 'btn-ghost' }}" href="{{ base_qs }}">Todas</a>
+    <a class="btn btn-sm {{ 'btn-primary' if filters.estado == 'incluido' else 'btn-ghost' }}" href="{{ base_qs }}&estado=incluido">Incluídas</a>
+    <a class="btn btn-sm {{ 'btn-primary' if filters.estado == 'excluido' else 'btn-ghost' }}" href="{{ base_qs }}&estado=excluido">Excluídas</a>
+    <a class="btn btn-sm {{ 'btn-primary' if filters.estado == 'pendente' else 'btn-ghost' }}" href="{{ base_qs }}&estado=pendente">Pendentes</a>
+  </div>
+  <table class="table">
+    <thead>
+      <tr>
+        <th><a href="{{ sort_url('titulo') }}">Título{% if sort == 'titulo' %} {{ '▲' if dir == 'asc' else '▼' }}{% endif %}</a></th>
+        <th><a href="{{ sort_url('autores') }}">Autores{% if sort == 'autores' %} {{ '▲' if dir == 'asc' else '▼' }}{% endif %}</a></th>
+        <th><a href="{{ sort_url('ano') }}">Ano{% if sort == 'ano' %} {{ '▲' if dir == 'asc' else '▼' }}{% endif %}</a></th>
+        <th><a href="{{ sort_url('fonte') }}">Fonte{% if sort == 'fonte' %} {{ '▲' if dir == 'asc' else '▼' }}{% endif %}</a></th>
+        <th><a href="{{ sort_url('tipo') }}">Tipo{% if sort == 'tipo' %} {{ '▲' if dir == 'asc' else '▼' }}{% endif %}</a></th>
+        <th><a href="{{ sort_url('estado') }}">Estado{% if sort == 'estado' %} {{ '▲' if dir == 'asc' else '▼' }}{% endif %}</a></th>
+        <th>Qualidade</th><th>PDF</th><th>Ações</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in papers %}
+      <tr>
+        <td><a href="/projetos/{{ project.slug }}/publicacoes/{{ p.id }}"><strong>{{ p.title }}</strong></a></td>
+        <td class="muted small">{{ p.authors[:97] ~ '…' if p.authors | length > 97 else p.authors }}</td>
+        <td>{{ p.year or '—' }}</td>
+        <td><code>{{ p.source }}</code></td>
+        <td class="muted small">{{ p.pub_type }}</td>
+        <td><span class="badge badge-{{ 'ativo' if p.state == 'incluido' else 'arquivado' if p.state == 'excluido' else 'pausado' if p.state == 'talvez' else 'novo' }}">{{ p.state }}</span></td>
+        <td>{% if qavgs.get(p.id) is not none %}<span class="badge badge-novo">{{ '%.2f' | format(qavgs[p.id]) }}</span>{% else %}—{% endif %}</td>
+        <td>
+          {% if p.pdf_path %}
+          <a class="btn btn-ghost btn-sm" target="_blank" rel="noopener"
+             href="/projetos/{{ project.slug }}/publicacoes/{{ p.id }}/pdf-view">📑</a>
+          {% elif p.url or p.doi %}
+          <form method="post" class="inline"
+                action="/projetos/{{ project.slug }}/publicacoes/{{ p.id }}/browser">
+            <button class="btn btn-ghost btn-sm" title="Abrir no Jataí Browser">🌐</button>
+          </form>
+          {% else %}—{% endif %}
+        </td>
+        <td class="actions" style="white-space:nowrap">
+          <!-- {% if p.doi %}<a class="btn btn-ghost btn-sm" href="https://doi.org/{{ p.doi }}" target="_blank" rel="noopener" title="DOI">DOI</a>{% endif %} -->
+          {% if p.url %}<a class="btn btn-ghost btn-sm" href="{{ p.url }}" target="_blank" rel="noopener" title="URL">🔗</a>{% endif %}
+          {% if p.state != 'incluido' %}
+          <form method="post" action="/projetos/{{ project.slug }}/publicacoes/{{ p.id }}/estado" class="inline">
+            <input type="hidden" name="state" value="incluido"><input type="hidden" name="next" value="list">
+            {% for k, v in filters.items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
+            <button class="btn btn-ghost btn-sm" style="color:var(--success)" title="Marcar como incluída">✓</button>
+          </form>
+          {% endif %}
+          {% if p.state != 'excluido' %}
+          <form method="post" action="/projetos/{{ project.slug }}/publicacoes/{{ p.id }}/estado" class="inline">
+            <input type="hidden" name="state" value="excluido"><input type="hidden" name="next" value="list">
+            {% for k, v in filters.items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
+            <button class="btn btn-ghost btn-sm" title="Marcar como excluída" style="color:var(--danger)">✕</button>
+          </form>
+          {% endif %}
+          <form method="post" action="/projetos/{{ project.slug }}/publicacoes/{{ p.id }}/delete" class="inline"
+                onsubmit="return confirm('Excluir esta publicação?');">
+            <input type="hidden" name="next" value="list">
+            {% for k, v in filters.items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
+            <button class="btn btn-danger btn-sm" title="Excluir">🗑</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="9" class="empty">Nenhuma publicação encontrada. Execute uma consulta na aba Consultas.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% if pages > 1 %}
+  {% set win = 2 %}
+  {% set pstart = [1, page - win] | max %}
+  {% set pend = [pages, page + win] | min %}
+  <div class="pagination">
+    <a class="btn btn-ghost btn-sm" href="{{ page_url(1) }}" {% if page == 1 %}style="opacity:.4;pointer-events:none"{% endif %}>« Primeira</a>
+    <a class="btn btn-ghost btn-sm" href="{{ page_url(page - 1) }}" {% if page == 1 %}style="opacity:.4;pointer-events:none"{% endif %}>‹ Anterior</a>
+    {% if pstart > 1 %}<span class="muted small">…</span>{% endif %}
+    {% for p in range(pstart, pend + 1) %}
+      {% if p == page %}<span class="btn btn-sm btn-primary">{{ p }}</span>
+      {% else %}<a class="btn btn-ghost btn-sm" href="{{ page_url(p) }}">{{ p }}</a>{% endif %}
+    {% endfor %}
+    {% if pend < pages %}<span class="muted small">…</span>{% endif %}
+    <a class="btn btn-ghost btn-sm" href="{{ page_url(page + 1) }}" {% if page == pages %}style="opacity:.4;pointer-events:none"{% endif %}>Próxima ›</a>
+    <a class="btn btn-ghost btn-sm" href="{{ page_url(pages) }}" {% if page == pages %}style="opacity:.4;pointer-events:none"{% endif %}>Última »</a>
+    <span class="muted small">({{ total }} resultados)</span>
+  </div>
+  {% endif %}
+</div>
+
+<dialog id="nova-publicacao" class="modal" style="width:min(720px,95vw)">
+  <div class="modal-head">
+    <h2>Nova publicação</h2>
+    <button type="button" class="btn btn-ghost btn-sm" id="np-close">✕</button>
+  </div>
+  <form method="post" action="/projetos/{{ project.slug }}/publicacoes">
+    <div class="form-grid">
+      <label class="span2">BibTeX <span class="muted small">(opcional — cole uma entrada @… para preencher os campos)</span>
+        <textarea id="np-bibtex" name="bibtex" rows="4" placeholder="@article{...}"></textarea>
+      </label>
+      <p class="muted small span2" id="np-hint"></p>
+      <label class="span2">Título *
+        <input type="text" name="title" id="np-title" required>
+      </label>
+      <label class="span2">Autores <span class="muted small">(separados por vírgula)</span>
+        <input type="text" name="authors" id="np-authors">
+      </label>
+      <label>Ano
+        <input type="number" name="year" id="np-year" min="1000" max="2100">
+      </label>
+      <label>DOI
+        <input type="text" name="doi" id="np-doi">
+      </label>
+      <label>Tipo
+        <input type="text" name="pub_type" id="np-pubtype" placeholder="artigo, conferência…">
+      </label>
+      <label class="span2">Periódico / evento
+        <input type="text" name="venue" id="np-venue">
+      </label>
+      <label class="span2">URL
+        <input type="url" name="url" id="np-url">
+      </label>
+      <label class="span2">Palavras-chave <span class="muted small">(separadas por vírgula)</span>
+        <input type="text" name="keywords" id="np-keywords">
+      </label>
+      <label class="span2">Resumo
+        <textarea name="abstract" id="np-abstract" rows="4"></textarea>
+      </label>
+      <div class="span2 actions-row">
+        <button class="btn" type="submit">Cadastrar publicação</button>
+        <button class="btn btn-ghost" type="button" id="np-clear">Limpar campos</button>
+      </div>
+    </div>
+  </form>
+</dialog>
+
+<script>
+(function () {
+  var dlg = document.getElementById('nova-publicacao');
+  var bibtex = document.getElementById('np-bibtex');
+  var hint = document.getElementById('np-hint');
+  var timer = null;
+  var lastText = '';
+
+  var FIELDS = {
+    title: 'np-title', authors: 'np-authors', year: 'np-year',
+    doi: 'np-doi', pub_type: 'np-pubtype', venue: 'np-venue',
+    url: 'np-url', keywords: 'np-keywords', abstract: 'np-abstract'
+  };
+
+  function setField(name, value) {
+    var el = document.getElementById(FIELDS[name]);
+    if (el && value !== undefined && value !== null && value !== '') {
+      el.value = value;
+    }
+  }
+
+  function parseBibtex() {
+    var text = bibtex.value.trim();
+    if (!text || text === lastText) return;
+    lastText = text;
+    var fd = new FormData();
+    fd.append('bibtex', text);
+    fetch('/projetos/{{ project.slug }}/publicacoes/bibtex', { method: 'POST', body: fd })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (!data.entries || !data.entries.length) {
+          hint.textContent = 'Nenhuma entrada BibTeX reconhecida — preencha os campos manualmente.';
+          return;
+        }
+        var e = data.entries[0];
+        setField('title', e.title);
+        setField('authors', (e.authors || []).join(', '));
+        setField('year', e.year);
+        setField('doi', e.doi);
+        setField('pub_type', e.pub_type);
+        setField('venue', e.venue);
+        setField('url', e.url);
+        setField('keywords', e.keywords);
+        setField('abstract', e.abstract);
+        hint.textContent = data.count > 1
+          ? data.count + ' entradas encontradas — campos preenchidos com a primeira.'
+          : 'Campos preenchidos a partir do BibTeX — revise antes de cadastrar.';
+      })
+      .catch(function () {
+        hint.textContent = 'Não foi possível interpretar o BibTeX.';
+      });
+  }
+
+  bibtex.addEventListener('input', function () {
+    clearTimeout(timer);
+    timer = setTimeout(parseBibtex, 400);
+  });
+
+  document.getElementById('btn-nova-publicacao').addEventListener('click', function () {
+    lastText = '';
+    hint.textContent = '';
+    dlg.showModal();
+  });
+  document.getElementById('np-close').addEventListener('click', function () { dlg.close(); });
+  document.getElementById('np-clear').addEventListener('click', function () {
+    this.closest('form').reset();
+    bibtex.value = '';
+    lastText = '';
+    hint.textContent = '';
+  });
+})();
+</script>
+{% endblock %}

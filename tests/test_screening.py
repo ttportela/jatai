@@ -2,7 +2,7 @@
 
 from types import SimpleNamespace
 
-from lelia.agents import screening
+from jatai.agents import screening
 
 
 def _criteria():

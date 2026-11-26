@@ -1,8 +1,8 @@
 """Adaptadores de consulta por fonte (QueryDefinition -> expressões)."""
 
-from lelia.search.adapters import semanticscholar
-from lelia.search.adapters.base import get_adapter
-from lelia.search.domain import Group, QueryDefinition, Term
+from jatai.search.adapters import semanticscholar
+from jatai.search.adapters.base import get_adapter
+from jatai.search.domain import Group, QueryDefinition, Term
 
 
 def _def(root) -> QueryDefinition:

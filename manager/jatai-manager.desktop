@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Jataí Manager
+Comment=Gerencia a instalação e execução do Jataí
+Exec=jatai-manager
+Icon=jatai
+Categories=Science;Office;
+Terminal=false
