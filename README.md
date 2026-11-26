@@ -1,4 +1,7 @@
-# Jataí
+<h1>
+  <img src="logo.png" alt="Logo" width="32" />
+  Jataí
+</h1>
 
 **Agente local de pesquisa científica** — descoberta, aquisição,
 triagem, análise profunda e catalogação de publicações, com LLMs
@@ -15,7 +18,7 @@ Tudo auditável, configurável e reproduzível.
 
 ## Autor e contribuições
 
-**Autor:** Tarlis Portela
+**Autor:** Tarlis Tortelli
 
 ---
 
